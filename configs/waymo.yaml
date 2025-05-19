@@ -3,7 +3,7 @@ model_path: "modelpath"
 semantic: True
 affine: True
 unicycle: False
-uc_reg: False
+uc_opt_pos: False
 uc_fit_iter: 100
 ignore_dynamic: False
 data_type: waymo

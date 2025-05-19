@@ -1,0 +1,19 @@
+# realcar_path: /home/ipd/zp/data/HUGSIM/3DRealCar
+# model_base: /home/ipd/zp/data/models/HUGSIM/nuscenes
+# uniad_path:  /nas/users/hyzhou/PAMI2024/release/UniAD_Sim/tools/e2e.sh
+# vad_path:  /nas/users/hyzhou/PAMI2024/release/VAD_Sim/tools/e2e.sh
+# ltf_path: /nas/users/hyzhou/PAMI2024/release/navsim/ltf_e2e.sh
+# output_dir: /home/ipd/zp/data/HUGSIM/nuscenes
+# HD_map:
+#   path: /nas/datasets/nuScenes/raw/Trainval
+#   version: nusc_trainval
+
+realcar_path: /home/sczone/hugsim_workspace/3DRealCar
+model_base: /home/sczone/hugsim_workspace/HUGSIM/models
+# uniad_path: /home/sczone/hugsim_workspace/UniAD_SIM/tools/e2e.sh
+# vad_path:  /nas/users/hyzhou/PAMI2024/release/VAD_Sim/tools/e2e.sh
+# ltf_path: /home/sczone/hugsim_workspace/NAVSIM/ltf_e2e.sh
+output_dir: /home/sczone/hugsim_workspace/outputs
+# HD_map:
+  # path: /nas/datasets/nuScenes/raw/Trainval
+  # version: nusc_trainval
