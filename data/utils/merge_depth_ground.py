@@ -46,6 +46,9 @@ if __name__ == "__main__":
         elif args.datatype == "kitti360":
             if "/cam_0/" in frame["rgb_path"]:
                 front_cam_poses.append(c2w)
+        elif args.datatype == "zone":
+            if "/CAM_FRONT_120/" in frame["rgb_path"]:
+                front_cam_poses.append(c2w)                
         else:
             raise NotImplementedError
 

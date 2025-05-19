@@ -177,6 +177,11 @@ def readHUGSIMCameras(path, data_type, ignore_dynamic):
                 else:
                     train_cam_infos.append(cam_info)
             
+            elif data_type == "zone":
+                if idx % 15 >= 12:
+                    test_cam_infos.append(cam_info)
+                else:
+                    train_cam_infos.append(cam_info)            
             else:
                 raise NotImplementedError
 

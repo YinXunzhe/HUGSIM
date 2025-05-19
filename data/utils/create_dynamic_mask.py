@@ -31,6 +31,8 @@ def main():
                              "CAM_BACK", "CAM_BACK_LEFT", "CAM_BACK_RIGHT")
     elif args.data_type == 'waymo':
         cameras = ['cam_1', 'cam_2', 'cam_3']
+    elif args.data_type == 'zone':
+        cameras = ("CAM_FRONT_120", "CAM_FRONT_LEFT", "CAM_FRONT_RIGHT")        
     else:
         raise NotImplementedError
     for cam in cameras:
