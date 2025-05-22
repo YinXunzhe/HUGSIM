@@ -1,3 +1,4 @@
+import hugsim_env
 import numpy as np
 from sim.utils.score_calculator import hugsim_evaluate
 import open3d as o3d
@@ -12,7 +13,6 @@ import sys
 import os
 sys.path.append(os.getcwd())
 sys.path.append(os.getcwd() + "/sim")
-import hugsim_env
 
 
 try:
@@ -53,8 +53,9 @@ class KeyboardDriver(object):
 
         if keys[K_SPACE]:
             self.acc = 0
-            self.steer_rate = 0  # 停车时将转向速率也置零            
+            self.steer_rate = 0  # 停车时将转向速率也置零
         return False
+
 
 class Player(object):
     def __init__(self):
@@ -67,31 +68,39 @@ class Player(object):
         pygame.display.flip()
         self.font = pygame.font.Font(pygame.font.get_default_font(), 20)
 
-    def render(self, info, obs, driver: KeyboardDriver):        
+    def render(self, info, obs, driver: KeyboardDriver):
         self.display.fill((0, 0, 0))
-        
+
         u_offset = 0
-        surface = pygame.surfarray.make_surface(obs['rgb']['CAM_FRONT_LEFT'].swapaxes(0, 1))
+        surface = pygame.surfarray.make_surface(
+            obs['rgb']['CAM_FRONT_LEFT'].swapaxes(0, 1))
         self.display.blit(surface, (u_offset, 0))
-        surface = pygame.surfarray.make_surface(obs['rgb']['CAM_BACK_LEFT'].swapaxes(0, 1))
+        surface = pygame.surfarray.make_surface(
+            obs['rgb']['CAM_BACK_LEFT'].swapaxes(0, 1))
         self.display.blit(surface, (u_offset, 550))
         u_offset += 800
-        surface = pygame.surfarray.make_surface(obs['rgb']['CAM_FRONT'].swapaxes(0, 1))
+        surface = pygame.surfarray.make_surface(
+            obs['rgb']['CAM_FRONT'].swapaxes(0, 1))
         self.display.blit(surface, (u_offset, 0))
-        surface = pygame.surfarray.make_surface(obs['rgb']['CAM_BACK'].swapaxes(0, 1))
+        surface = pygame.surfarray.make_surface(
+            obs['rgb']['CAM_BACK'].swapaxes(0, 1))
         self.display.blit(surface, (u_offset, 550))
         u_offset += 800
-        surface = pygame.surfarray.make_surface(obs['rgb']['CAM_FRONT_RIGHT'].swapaxes(0, 1))
+        surface = pygame.surfarray.make_surface(
+            obs['rgb']['CAM_FRONT_RIGHT'].swapaxes(0, 1))
         self.display.blit(surface, (u_offset, 0))
-        surface = pygame.surfarray.make_surface(obs['rgb']['CAM_BACK_RIGHT'].swapaxes(0, 1))
+        surface = pygame.surfarray.make_surface(
+            obs['rgb']['CAM_BACK_RIGHT'].swapaxes(0, 1))
         self.display.blit(surface, (u_offset, 550))
-        
+
         color = (255, 255, 255)
         v_offset = 450
-        surface = self.font.render(f'driver-------acc:{driver.acc}, steer_rate:{driver.steer_rate}', True, color)
+        surface = self.font.render(
+            f'driver-------acc:{driver.acc}, steer_rate:{driver.steer_rate}', True, color)
         self.display.blit(surface, (0, v_offset))
         v_offset += 18
-        surface = self.font.render(f'time_stamp:{info["timestamp"]}, collision:{info["collision"]}', True, color)
+        surface = self.font.render(
+            f'time_stamp:{info["timestamp"]}, collision:{info["collision"]}', True, color)
         self.display.blit(surface, (0, v_offset))
         v_offset += 18
         surface = self.font.render(f'ego pose:{info["ego_pos"]}', True, color)
@@ -100,10 +109,12 @@ class Player(object):
         surface = self.font.render(f'ego rot:{info["ego_rot"]}', True, color)
         self.display.blit(surface, (0, v_offset))
         v_offset += 18
-        surface = self.font.render(f'velo:{info["ego_velo"]}, accelerate:{info["accelerate"]}, steer_rate:{info["steer_rate"]}', True, color)
+        surface = self.font.render(
+            f'velo:{info["ego_velo"]}, accelerate:{info["accelerate"]}, steer_rate:{info["steer_rate"]}', True, color)
         self.display.blit(surface, (0, v_offset))
         # v_offset += 18
         pygame.display.flip()
+
 
 def game_loop(cfg, output):
 
@@ -123,7 +134,7 @@ def game_loop(cfg, output):
     print('Ready for simulation')
 
     driver = KeyboardDriver()
-    
+
     player = Player()
 
     obs, info = None, None
@@ -155,7 +166,7 @@ def game_loop(cfg, output):
         # })
 
         player.render(info, obs, driver)
-        
+
     with open(obs_pipe, "wb") as pipe:
         pipe.write(pickle.dumps('Done'))
 
@@ -192,13 +203,14 @@ if __name__ == "__main__":
     )
     cfg.base.output_dir = cfg.base.output_dir + "/manual"
 
-    model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name)
+    model_path = os.path.join(
+        cfg.base.model_base, cfg.scenario.scene_name, "models")
     model_config = OmegaConf.load(os.path.join(model_path, 'cfg.yaml'))
     cfg.update(model_config)
 
     output = os.path.join(cfg.base.output_dir,
                           cfg.scenario.scene_name+"_"+cfg.scenario.mode)
-    os.makedirs(output, exist_ok=True)    
+    os.makedirs(output, exist_ok=True)
 
     try:
         game_loop(cfg, output)

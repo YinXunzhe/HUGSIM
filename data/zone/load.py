@@ -8,7 +8,7 @@ import json
 import cv2  # OpenCV图像处理
 from scipy.spatial.transform import Rotation as SCR  # 用于旋转矩阵计算
 from datetime import datetime  # 用于时间戳解析
-
+import transforms3d as tr
 
 # 为了和vertex里的坐标顺序为lhw匹配
 LHW_TO_LWH = np.array(
@@ -90,7 +90,45 @@ if __name__ == '__main__':
                         for f in os.listdir(json_dir) if f.endswith('.json')])
 
     # 获取15秒时间窗口内的文件（前15秒）
-    filtered_files = json_files[:150]  # 假设10fps，15秒共150帧
+    filtered_files = json_files[:50]  # 假设10fps，15秒共150帧
+
+    # 预处理odom数据
+    import bisect
+    odom_file = os.path.join(seq_path, "odom_5.txt")
+    odom_data = []
+    odom_timestamps = []
+    if os.path.exists(odom_file):
+        with open(odom_file, 'r') as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 7:  # 时间戳 + x,y,z,roll,pitch,yaw
+                    timestamp = float(parts[0]) + 28800  # 添加8小时时区校正
+                    odom_data.append({
+                        'timestamp': timestamp,
+                        'x': float(parts[1]),
+                        'y': float(parts[2]),
+                        'z': float(parts[3]),
+                        'roll': float(parts[4]),
+                        'pitch': float(parts[5]),
+                        'yaw': float(parts[6])
+                    })
+                    odom_timestamps.append(timestamp)
+
+    # 从meta.json中获取车辆位姿
+    meta_file = os.path.join(seq_path, "meta.json")
+    ego2world = {}
+    with open(meta_file, 'r') as f:
+        data = json.load(f)
+    meta = data.get("meta", {})
+    for i, (frame_name, frame_data) in enumerate(meta.items()):
+        # 提取前 150 帧的信息
+        if i >= 150:
+            break
+        pose_list = frame_data.get("pose", [])
+        matrix4 = None
+        if isinstance(pose_list, list) and pose_list:
+            matrix4 = pose_list[0].get("matrix4")
+            ego2world[frame_name] = matrix4
 
     # 创建可遍历的数据序列对象
     class JSONSequence:
@@ -134,32 +172,50 @@ if __name__ == '__main__':
     timestamps = []  # 时间戳列表
     start_timestamp = None
     first_pcd = None
-    # 预处理odom数据
-    import bisect
-    odom_file = os.path.join(seq_path, "odom_5.txt")
-    odom_data = []
-    odom_timestamps = []
-    if os.path.exists(odom_file):
-        with open(odom_file, 'r') as f:
-            for line in f:
-                parts = line.strip().split()
-                if len(parts) >= 7:  # 时间戳 + x,y,z,roll,pitch,yaw
-                    timestamp = float(parts[0]) + 28800  # 添加8小时时区校正
-                    odom_data.append({
-                        'timestamp': timestamp,
-                        'x': float(parts[1]),
-                        'y': float(parts[2]),
-                        'z': float(parts[3]),
-                        'roll': float(parts[4]),
-                        'pitch': float(parts[5]),
-                        'yaw': float(parts[6])
-                    })
-                    odom_timestamps.append(timestamp)
+    valid_frame_idx = 0
 
     # 遍历所有JSON数据帧
     for frame_idx, frame_data in tqdm(enumerate(data_sequence)):
         # 计算相对时间戳（秒）
         timestamp_str = frame_data["meta"]["sensor"][0]["timestamp"]
+
+        # 获取自车在世界中的位姿（车辆到世界的变换）
+        v2w = np.eye(4)
+        # 优先使用meta json中匹配到的矩阵
+        if timestamp_str in ego2world:
+            v2w = np.array(ego2world[timestamp_str]).reshape(4, 4)
+        else:
+            # 有时 meta json 中没有，跳过该帧
+            continue
+            # # 有时 meta json 中没有，则在odom中找对应时间戳的车辆位姿
+            # idx = bisect.bisect_left(odom_timestamps, current_timestamp)
+            # # 处理边界情况
+            # if idx == 0:
+            #     closest_odom = odom_data[0]
+            # elif idx == len(odom_data):
+            #     closest_odom = odom_data[-1]
+            # else:
+            #     # 比较前后两个时间戳
+            #     prev_diff = current_timestamp - odom_timestamps[idx-1]
+            #     next_diff = odom_timestamps[idx] - current_timestamp
+            #     closest_odom = odom_data[idx -
+            #                              1] if prev_diff < next_diff else odom_data[idx]
+            # if current_timestamp-closest_odom['timestamp'] < 1e-6:
+            #     rot = tr.euler.euler2mat(
+            #         closest_odom['roll'],
+            #         closest_odom['pitch'],
+            #         closest_odom['yaw'])
+
+            #     v2w[:3, :3] = rot
+            #     v2w[:3, 3] = [
+            #         closest_odom['x'],
+            #         closest_odom['y'],
+            #         closest_odom['z']
+            #     ]
+            # else:
+            #     raise ValueError(
+            #         f"Timestamp '{timestamp_str}' not found in mete_json or odom5_txt!")
+
         current_timestamp = parse_timestamp(timestamp_str)
         if start_timestamp is None:
             start_timestamp = current_timestamp
@@ -167,35 +223,6 @@ if __name__ == '__main__':
         t = current_timestamp - start_timestamp
 
         timestamps.append(t)
-
-        # 在odom中找到对应时间戳的车辆位姿（车辆到世界的变换）
-        idx = bisect.bisect_left(odom_timestamps, current_timestamp)
-        # 处理边界情况
-        if idx == 0:
-            closest_odom = odom_data[0]
-        elif idx == len(odom_data):
-            closest_odom = odom_data[-1]
-        else:
-            # 比较前后两个时间戳
-            prev_diff = current_timestamp - odom_timestamps[idx-1]
-            next_diff = odom_timestamps[idx] - current_timestamp
-            closest_odom = odom_data[idx -
-                                     1] if prev_diff < next_diff else odom_data[idx]
-
-        rot = SCR.from_euler('zxy', [
-            closest_odom['yaw'],
-            closest_odom['roll'],
-            closest_odom['pitch'],
-
-        ]).as_matrix()
-
-        v2w = np.eye(4)
-        v2w[:3, :3] = rot
-        v2w[:3, 3] = [
-            closest_odom['x'],
-            closest_odom['y'],
-            closest_odom['z']
-        ]
 
         # 处理图像数据
         for sensor in frame_data.get('meta', {}).get('sensor', []):
@@ -216,14 +243,18 @@ if __name__ == '__main__':
                     f"Warning: Failed to read image for {cam_id} at {img_path}")
                 continue
             h, w = img.shape[:2]
-            if args.downsample > 1:
-                h = int(h // args.downsample)
-                w = int(w // args.downsample)
+            downsample_factor = args.downsample
+            # CAM_FRONT_120的分辨率是其他相机的两倍
+            if (cam_id == 'CAM_FRONT_120'):
+                downsample_factor = downsample_factor*2
+            if downsample_factor > 1:
+                h = int(h // downsample_factor)
+                w = int(w // downsample_factor)
                 img = cv2.resize(img, (w, h))
             output_dir = os.path.join(save_dir, "images", cam_id)
             os.makedirs(output_dir, exist_ok=True)
             output_path = os.path.join(
-                output_dir, f"{str(frame_idx).zfill(6)}.png")
+                output_dir, f"{str(valid_frame_idx).zfill(6)}.png")
             cv2.imwrite(output_path, img)
             if cam_id not in imsize:
                 imsize[cam_id] = []
@@ -233,10 +264,10 @@ if __name__ == '__main__':
             params = sensor['sensor_param']
             # 构建相机内参矩阵（考虑下采样）
             cam_intrinsic = np.eye(4)
-            cam_intrinsic[0, 0] = params['intrinsic'][0][0] / args.downsample
-            cam_intrinsic[1, 1] = params['intrinsic'][1][1] / args.downsample
-            cam_intrinsic[0, 2] = params['intrinsic'][0][2] / args.downsample
-            cam_intrinsic[1, 2] = params['intrinsic'][1][2] / args.downsample
+            cam_intrinsic[0, 0] = params['intrinsic'][0][0] / downsample_factor
+            cam_intrinsic[1, 1] = params['intrinsic'][1][1] / downsample_factor
+            cam_intrinsic[0, 2] = params['intrinsic'][0][2] / downsample_factor
+            cam_intrinsic[1, 2] = params['intrinsic'][1][2] / downsample_factor
 
             if cam_id not in intr:
                 intr[cam_id] = []
@@ -309,8 +340,9 @@ if __name__ == '__main__':
                 vehicles[obj_id]['lhw'].append(
                     np.array([length, height, width]))
                 vehicles[obj_id]["timestamp"].append(t)
-                vehicles[obj_id]['frame'].append(frame_idx)
+                vehicles[obj_id]['frame'].append(valid_frame_idx)
 
+        valid_frame_idx += 1
     # 遍历每帧json数据结束
 
     # 标准化位姿 - 将所有位姿转换到前视相机的第0帧坐标系下

@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 
+
 class HUGSIM_dataset(Dataset):
     def __init__(self, views, data_type):
         super().__init__()
@@ -11,9 +12,11 @@ class HUGSIM_dataset(Dataset):
             self.gap = 3
         elif data_type == 'kitti':
             self.gap = 2
+        elif data_type == 'zone':
+            self.gap = 3
         else:
             self.gap = 6
-    
+
     def __getitem__(self, index):
         if index - self.gap >= 0:
             prev_index = index-self.gap
@@ -44,13 +47,15 @@ class HUGSIM_dataset(Dataset):
 
     def __len__(self):
         return len(self.views)
-    
+
+
 def tocuda(ans):
     if ans is None:
         return None
     else:
         return ans.cuda()
-    
+
+
 def hugsim_collate(data):
     assert len(data) == 1
     return data[0]

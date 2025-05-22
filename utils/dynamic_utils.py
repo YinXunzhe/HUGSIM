@@ -150,6 +150,8 @@ def create_unicycle_model(train_cams, model_path, opt_iter=0, opt_pos=False, dat
         cameras = [cam for cam in train_cams if (('CAM_FRONT' in cam.image_name) and ('LEFT' not in cam.image_name) and ('RIGHT' not in cam.image_name))]
     elif data_type == 'pandaset':
         cameras = [cam for cam in train_cams if 'front_camera' in cam.image_name]
+    elif data_type == 'zone':
+        cameras = [cam for cam in train_cams if 'CAM_FRONT_120' in cam.image_name]        
     else:
         raise NotImplementedError    
     
