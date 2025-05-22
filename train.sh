@@ -6,8 +6,8 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 seq_name=scene-20250317_161633_1
 dataset_name=zone
 
-input_path=${HUGSIM_WORKSPACE}/hugsim_data/${dataset_name}/$seq_name
-output_path=${input_path}/models
+input_path=${HUGSIM_WORKSPACE}/hugsim_data/${dataset_name}/${seq_name}
+output_path=${HUGSIM_WORKSPACE}/models/${dataset_name}/${seq_name}
 
 mkdir -p ${output_path}
 

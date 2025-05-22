@@ -244,9 +244,9 @@ if __name__ == '__main__':
                 continue
             h, w = img.shape[:2]
             downsample_factor = args.downsample
-            # CAM_FRONT_120的分辨率是其他相机的两倍
-            if (cam_id == 'CAM_FRONT_120'):
-                downsample_factor = downsample_factor*2
+            # # CAM_FRONT_120的分辨率是其他相机的两倍
+            # if (cam_id == 'CAM_FRONT_120'):
+            #     downsample_factor = downsample_factor*2
             if downsample_factor > 1:
                 h = int(h // downsample_factor)
                 w = int(w // downsample_factor)

@@ -9,7 +9,7 @@
 #   version: nusc_trainval
 
 realcar_path: /home/sczone/hugsim_workspace/3DRealCar
-model_base: /home/sczone/hugsim_workspace/HUGSIM/models
+model_base: /home/sczone/hugsim_workspace/models/nusc/
 # uniad_path: /home/sczone/hugsim_workspace/UniAD_SIM/tools/e2e.sh
 # vad_path:  /nas/users/hyzhou/PAMI2024/release/VAD_Sim/tools/e2e.sh
 # ltf_path: /home/sczone/hugsim_workspace/NAVSIM/ltf_e2e.sh
