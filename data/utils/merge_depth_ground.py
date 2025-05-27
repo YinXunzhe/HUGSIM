@@ -26,7 +26,7 @@ if __name__ == "__main__":
     ##########################################################################
     #                        unproject pixels                             #
     ##########################################################################
-    
+
     points, colors = [], []
     sample_per_frame = args.total // len(meta_data["frames"])
     front_cam_poses = []
@@ -48,7 +48,7 @@ if __name__ == "__main__":
                 front_cam_poses.append(c2w)
         elif args.datatype == "zone":
             if "/CAM_FRONT_120/" in frame["rgb_path"]:
-                front_cam_poses.append(c2w)                
+                front_cam_poses.append(c2w)
         else:
             raise NotImplementedError
 
@@ -83,7 +83,13 @@ if __name__ == "__main__":
         z = depth.reshape(-1)
         local_points = np.stack([x, y, z], axis=1)
         local_colors = im.reshape(-1, 3).astype(np.float32) / 255.0
-
+        
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(local_points)
+        pcd.colors = o3d.utility.Vector3dVector(local_colors)
+        o3d.io.write_point_cloud(os.path.join(
+            args.out, "ground_points3d_unproject.ply"), pcd)
+    
         # ground semantics
         smts_path = os.path.join(
             args.out,
@@ -93,11 +99,33 @@ if __name__ == "__main__":
             .replace(".png", ".npy"),
         )
         if os.path.exists(smts_path):
-            smts = np.load(smts_path).reshape(-1)
-            mask = smts <= 1
+            smts = np.load(smts_path)
+            # 地面mask
+            mask = smts <= 1 
+            
+            # # zone前视图像中需要去除引擎盖部分（也被识别为了地面）
+            # if args.datatype == "zone" and frame_cam == 'CAM_FRONT_120':
+            #     height, width = smts.shape
+            #     # 创建引擎盖遮罩（底部25%为True）
+            #     hood_rows = int(height * 0.25)
+            #     engin_hood_mask = np.zeros((height, width), dtype=bool)
+            #     engin_hood_mask[-hood_rows:, :] = True 
+            #     # 地面部分
+            #     mask = mask & (~engin_hood_mask)
+                
+            mask=mask.reshape(-1)
             local_points = local_points[mask]
             local_colors = local_colors[mask]
+        else:
+            raise FileNotFoundError(
+                f"Semantics file not found at {smts_path}, ground filtering aborted")
 
+        # pcd = o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(local_points)
+        # pcd.colors = o3d.utility.Vector3dVector(local_colors)
+        # o3d.io.write_point_cloud(os.path.join(
+        #     args.out, "ground_points3d_unproject_remove.ply"), pcd)
+        
         # random downsample
         if local_points.shape[0] < sample_per_frame:
             continue
@@ -115,10 +143,16 @@ if __name__ == "__main__":
     points = np.concatenate(points)
     colors = np.concatenate(colors)
 
+    # pcd = o3d.geometry.PointCloud()
+    # pcd.points = o3d.utility.Vector3dVector(points)
+    # pcd.colors = o3d.utility.Vector3dVector(colors)
+    # o3d.io.write_point_cloud(os.path.join(
+    #     args.out, "ground_points3d_before.ply"), pcd)
+    
     ##########################################################################
     #                    Multi-Plane Ground Model                       #
     ##########################################################################
-    
+
     # Read front cam poses
     if args.datatype == "kitti360":
         front_cam_height = 1.55
@@ -131,35 +165,37 @@ if __name__ == "__main__":
         front_rect_mat = front_info["rect_mat"]
     front_cam_poses = np.stack(front_cam_poses)
     # front_cam_poses[:, :3, :3] = np.einsum('ij, njk -> nik', front_rect_mat, front_cam_poses[:, :3, :3])
-    
+
     # Init ground point cloud
     points_cam_dist = np.sqrt(
         np.sum(
-            (points[:, np.newaxis, :] - front_cam_poses[:-1, :3, 3][np.newaxis, :, :])
+            (points[:, np.newaxis, :] -
+             front_cam_poses[:-1, :3, 3][np.newaxis, :, :])
             ** 2,
             axis=-1,
         )
     )
-    
+
     # nearest cam
     nearest_cam_idx = np.argmin(points_cam_dist, axis=1)
-    nearest_c2w = front_cam_poses[nearest_cam_idx] # (N, 4, 4)
-    nearest_w2c = np.linalg.inv(front_cam_poses)[nearest_cam_idx] # (N, 4, 4)
+    nearest_c2w = front_cam_poses[nearest_cam_idx]  # (N, 4, 4)
+    nearest_w2c = np.linalg.inv(front_cam_poses)[nearest_cam_idx]  # (N, 4, 4)
     points_local = (
         np.einsum("nij,nj->ni", nearest_w2c[:, :3, :3], points)
         + nearest_w2c[:, :3, 3]
-    ) # (N, 3)
+    )  # (N, 3)
     points_local[:, 1] = front_cam_height
     points = (
         np.einsum("nij,nj->ni", nearest_c2w[:, :3, :3], points_local)
         + nearest_c2w[:, :3, 3]
-    ) # (N, 3)
+    )  # (N, 3)
 
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
     pcd.colors = o3d.utility.Vector3dVector(colors)
-    o3d.io.write_point_cloud(os.path.join(args.out, "ground_points3d.ply"), pcd)
-    
+    o3d.io.write_point_cloud(os.path.join(
+        args.out, "ground_points3d.ply"), pcd)
+
     # Get high level command
     forecast = 20
     threshold = 2.5
@@ -172,12 +208,13 @@ if __name__ == "__main__":
         inv_cam_pose = np.linalg.inv(cam_pose)
         forecast_in_curr = inv_cam_pose @ forecast_campose
         if forecast_in_curr[0, 3] > threshold:
-            high_level_commands.append(0) # right
+            high_level_commands.append(0)  # right
         elif forecast_in_curr[0, 3] < -threshold:
-            high_level_commands.append(1) # left
+            high_level_commands.append(1)  # left
         else:
-            high_level_commands.append(2) # forward
+            high_level_commands.append(2)  # forward
 
     print(high_level_commands)
     with open(os.path.join(args.out, "ground_param.pkl"), "wb") as f:
-        pickle.dump((front_cam_poses, front_cam_height, high_level_commands), f)
+        pickle.dump((front_cam_poses, front_cam_height,
+                    high_level_commands), f)

@@ -17,11 +17,7 @@ sys.path.append(os.getcwd() + "/sim")
 
 try:
     import pygame
-    from pygame.locals import K_DOWN
-    from pygame.locals import K_LEFT
-    from pygame.locals import K_RIGHT
-    from pygame.locals import K_UP
-    from pygame.locals import K_SPACE
+    from pygame.locals import *
 except ImportError:
     raise RuntimeError(
         'cannot import pygame, make sure pygame package is installed')
@@ -35,25 +31,49 @@ class KeyboardDriver(object):
         self.acc = 0
         self.steer_rate = 0
 
+
     def parse_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return True
-        keys = pygame.key.get_pressed()
-        if keys[K_UP]:
-            self.acc = min(max(self.acc + 0.2, 0), 4.00)
-        elif keys[K_DOWN]:
-            self.acc = max(min(self.acc - 0.2, 0), -4.00)
-        else:
-            self.acc = 0
-        if keys[K_LEFT]:
-            self.steer_rate = min(self.steer_rate + 0.02, 1.00)
-        elif keys[K_RIGHT]:
-            self.steer_rate = max(self.steer_rate - 0.02, -1.00)
 
+        keys = pygame.key.get_pressed()
+
+        # ===== 加速度控制 =====
+        target_acc = 0.0
+        if keys[K_UP]:
+            target_acc = 2.0
+        elif keys[K_DOWN]:
+            target_acc = -2.0
+
+        # 平滑逼近目标加速度
+        acc_alpha = 0.1  # 越小越慢
+        self.acc += acc_alpha * (target_acc - self.acc)
+
+        # 松开时逐渐减速（模拟滑行）
+        if not keys[K_UP] and not keys[K_DOWN]:
+            self.acc *= 0.95  # 模拟滑行阻力
+
+        # ===== 转向控制 =====
+        target_steer_rate = 0.0
+        if keys[K_LEFT]:
+            target_steer_rate = 0.8
+        elif keys[K_RIGHT]:
+            target_steer_rate = -0.8
+
+        # 平滑逼近目标转向速率
+        steer_alpha = 0.15  # 越小越平滑
+        self.steer_rate += steer_alpha * (target_steer_rate - self.steer_rate)
+
+        # 松开时转向回正
+        if not keys[K_LEFT] and not keys[K_RIGHT]:
+            self.steer_rate *= 0.85  # 模拟回正力矩
+
+        # ===== 紧急停止 =====
         if keys[K_SPACE]:
-            self.acc = 0
-            self.steer_rate = 0  # 停车时将转向速率也置零
+            self.acc = 0.0
+            self.steer_rate = 0.0
+
         return False
 
 
@@ -96,7 +116,7 @@ class Player(object):
         color = (255, 255, 255)
         v_offset = 450
         surface = self.font.render(
-            f'driver-------acc:{driver.acc}, steer_rate:{driver.steer_rate}', True, color)
+            f'driver-------acc:{driver.acc:.1f}, steer_rate:{driver.steer_rate:.1f}', True, color)
         self.display.blit(surface, (0, v_offset))
         v_offset += 18
         surface = self.font.render(
@@ -110,7 +130,7 @@ class Player(object):
         self.display.blit(surface, (0, v_offset))
         v_offset += 18
         surface = self.font.render(
-            f'velo:{info["ego_velo"]}, accelerate:{info["accelerate"]}, steer_rate:{info["steer_rate"]}', True, color)
+            f'velo:{info["ego_velo"]:.1f}, accelerate:{info["accelerate"]:.1f}, steer_rate:{info["steer_rate"]:.1f}', True, color)
         self.display.blit(surface, (0, v_offset))
         # v_offset += 18
         pygame.display.flip()

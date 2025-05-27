@@ -90,7 +90,7 @@ if __name__ == '__main__':
                         for f in os.listdir(json_dir) if f.endswith('.json')])
 
     # 获取15秒时间窗口内的文件（前15秒）
-    filtered_files = json_files[:50]  # 假设10fps，15秒共150帧
+    filtered_files = json_files[:50]  # 10fps，15秒共150帧
 
     # 预处理odom数据
     import bisect
@@ -244,9 +244,13 @@ if __name__ == '__main__':
                 continue
             h, w = img.shape[:2]
             downsample_factor = args.downsample
-            # # CAM_FRONT_120的分辨率是其他相机的两倍
-            # if (cam_id == 'CAM_FRONT_120'):
-            #     downsample_factor = downsample_factor*2
+            # 截去前视引擎盖部分
+            engine_hood_pixels = 0
+            if (cam_id == 'CAM_FRONT_120'):
+                engine_hood_pixels = 512  # 原图引擎盖高度
+                # img = img[0:h, :]
+                img = img[engine_hood_pixels:h-engine_hood_pixels, :]
+                h = h-2*engine_hood_pixels
             if downsample_factor > 1:
                 h = int(h // downsample_factor)
                 w = int(w // downsample_factor)
@@ -262,12 +266,14 @@ if __name__ == '__main__':
 
             # 获取相机参数
             params = sensor['sensor_param']
-            # 构建相机内参矩阵（考虑下采样）
+            # 构建相机内参矩阵（考虑下采样和截取）
             cam_intrinsic = np.eye(4)
             cam_intrinsic[0, 0] = params['intrinsic'][0][0] / downsample_factor
             cam_intrinsic[1, 1] = params['intrinsic'][1][1] / downsample_factor
             cam_intrinsic[0, 2] = params['intrinsic'][0][2] / downsample_factor
-            cam_intrinsic[1, 2] = params['intrinsic'][1][2] / downsample_factor
+            # cam_intrinsic[1, 2] = params['intrinsic'][1][2] / downsample_factor
+            cam_intrinsic[1, 2] = (
+                params['intrinsic'][1][2] - engine_hood_pixels) / downsample_factor
 
             if cam_id not in intr:
                 intr[cam_id] = []

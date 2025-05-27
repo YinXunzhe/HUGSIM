@@ -223,7 +223,7 @@ class HUGSimEnv(gymnasium.Env):
             rgb = (torch.permute(render_pkg['render'].clamp(0, 1), (1,2,0)).detach().cpu().numpy() * 255).astype(np.uint8)
             smt = torch.argmax(render_pkg['feats'], dim=0).detach().cpu().numpy().astype(np.uint8)
             depth = render_pkg['depth'][0].detach().cpu().numpy()
-            if (self.data_type == 'waymo' or self.data_type == 'kitti360') and 'BACK' in cam_name:
+            if (self.data_type == 'waymo' or self.data_type == 'kitti360' or self.data_type == 'zone') and 'BACK' in cam_name:
                 rgbs[cam_name] = np.zeros_like(rgb)
                 semantics[cam_name] = np.zeros_like(smt)
                 depths[cam_name] = np.zeros_like(depth)
