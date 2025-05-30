@@ -84,11 +84,11 @@ if __name__ == "__main__":
         local_points = np.stack([x, y, z], axis=1)
         local_colors = im.reshape(-1, 3).astype(np.float32) / 255.0
         
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(local_points)
-        pcd.colors = o3d.utility.Vector3dVector(local_colors)
-        o3d.io.write_point_cloud(os.path.join(
-            args.out, "ground_points3d_unproject.ply"), pcd)
+        # pcd = o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(local_points)
+        # pcd.colors = o3d.utility.Vector3dVector(local_colors)
+        # o3d.io.write_point_cloud(os.path.join(
+        #     args.out, "ground_points3d_unproject.ply"), pcd)
     
         # ground semantics
         smts_path = os.path.join(
