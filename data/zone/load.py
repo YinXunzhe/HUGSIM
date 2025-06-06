@@ -1,14 +1,91 @@
+import numpy as np
+# import transforms3d as tr
+from datetime import datetime  # 用于时间戳解析
+from scipy.spatial.transform import Rotation as SCR  # 用于旋转矩阵计算
+import cv2  # OpenCV图像处理
+import json
+from tqdm import tqdm  # 进度条显示
 from datetime import datetime
 import os
 import argparse
 import open3d as o3d  # 用于3D点云处理
-import numpy as np
-from tqdm import tqdm  # 进度条显示
-import json
-import cv2  # OpenCV图像处理
-from scipy.spatial.transform import Rotation as SCR  # 用于旋转矩阵计算
-from datetime import datetime  # 用于时间戳解析
-import transforms3d as tr
+
+
+def get_rgb_by_distance(cur_val, min_val=0, max_val=50):
+    jet_color_matrix = [0, 0, 0.5625,
+                        0, 0, 0.6250,
+                        0, 0, 0.6875,
+                        0, 0, 0.7500,
+                        0, 0, 0.8125,
+                        0, 0, 0.8750,
+                        0, 0, 0.9375,
+                        0, 0, 1,
+                        0, 0.0625, 1,
+                        0, 0.1250, 1,
+                        0, 0.1875, 1,
+                        0, 0.2500, 1,
+                        0, 0.3125, 1,
+                        0, 0.3750, 1,
+                        0, 0.4375, 1,
+                        0, 0.5000, 1,
+                        0, 0.5625, 1,
+                        0, 0.6250, 1,
+                        0, 0.6875, 1,
+                        0, 0.7500, 1,
+                        0, 0.8125, 1,
+                        0, 0.8750, 1,
+                        0, 0.9375, 1,
+                        0, 1, 1,
+                        0.0625, 1, 0.9375,
+                        0.1250, 1, 0.8750,
+                        0.1875, 1, 0.8125,
+                        0.2500, 1, 0.7500,
+                        0.3125, 1, 0.6875,
+                        0.3750, 1, 0.6250,
+                        0.4375, 1, 0.5625,
+                        0.5000, 1, 0.5000,
+                        0.5625, 1, 0.4375,
+                        0.6250, 1, 0.3750,
+                        0.6875, 1, 0.3125,
+                        0.7500, 1, 0.2500,
+                        0.8125, 1, 0.1875,
+                        0.8750, 1, 0.1250,
+                        0.9375, 1, 0.0625,
+                        1, 1, 0,
+                        1, 0.9375, 0,
+                        1, 0.8750, 0,
+                        1, 0.8125, 0,
+                        1, 0.7500, 0,
+                        1, 0.6875, 0,
+                        1, 0.6250, 0,
+                        1, 0.5625, 0,
+                        1, 0.5000, 0,
+                        1, 0.4375, 0,
+                        1, 0.3750, 0,
+                        1, 0.3125, 0,
+                        1, 0.2500, 0,
+                        1, 0.1875, 0,
+                        1, 0.1250, 0,
+                        1, 0.0625, 0,
+                        1, 0, 0,
+                        0.9375, 0, 0,
+                        0.8750, 0, 0,
+                        0.8125, 0, 0,
+                        0.7500, 0, 0,
+                        0.6875, 0, 0,
+                        0.6250, 0, 0,
+                        0.5625, 0, 0,
+                        0.5000, 0, 0]
+    jet_color_matrix = np.reshape(np.asarray(jet_color_matrix) * 255, (64, 3))
+    jet_color_matrix = jet_color_matrix.astype(dtype=np.uint8)
+
+    cur_val = np.clip(cur_val, min_val, max_val)
+    index = (cur_val - min_val) / max_val * 63
+    index = np.round(index).astype(np.int8)
+    rgb_val = jet_color_matrix[index, :]
+
+    return rgb_val
+
 
 # 为了和vertex里的坐标顺序为lhw匹配
 LHW_TO_LWH = np.array(
@@ -54,6 +131,11 @@ def get_opts():
                         help='输出目录路径')
     parser.add_argument('--downsample', type=float, default=2,
                         help='图像下采样率，默认为2')
+    parser.add_argument('--rimg', action="store_true", default=False,
+                        help='是否生成rimg图像'),
+    parser.add_argument('--lidar_depth', action="store_true", default=False,
+                        help='是否根据点云生成深度图像')
+
     return parser.parse_args()
 
 
@@ -158,6 +240,11 @@ if __name__ == '__main__':
     for cam in cams:
         os.makedirs(os.path.join(save_dir, "images", f"{cam}"), exist_ok=True)
 
+    # 创建Lidar保存目录
+    os.makedirs(os.path.join(save_dir, "lidar"), exist_ok=True)
+    # 创建有颜色点云的保存目录
+    os.makedirs(os.path.join(save_dir, "lidar_colored"), exist_ok=True)
+
     ##########################################################################
     #                     读取所有帧信息                                      #
     ##########################################################################
@@ -223,6 +310,27 @@ if __name__ == '__main__':
         t = current_timestamp - start_timestamp
 
         timestamps.append(t)
+
+        # 处理Lidar数据
+        # 读取PCD文件
+        pcd_name = timestamp_str
+        pcd_path = os.path.join(
+            seq_path, f"Lidar/Pandar128_Compensate/{pcd_name}")
+        pcd = o3d.io.read_point_cloud(pcd_path)
+
+        # 将点云数据转换为numpy数组，只保留xyz坐标
+        lidar_points = np.asarray(pcd.points)[:, :3]
+        # # 筛选车辆附近可能的地面点  车辆前后 6米范围内（|X| < 6）车辆左右 3米范围内（|Y| < 3）
+        # ground_mask = (np.abs(lidar_points[:, 0]) < 6) & (
+        #     np.abs(lidar_points[:, 1]) < 3)
+        # lidar_points = lidar_points[ground_mask]
+
+        # 创建Open3D点云对象
+        pcd = o3d.geometry.PointCloud()
+        # 初始化点云颜色数组，默认为黑色
+        colors = np.zeros((len(lidar_points), 3))
+        # 记录每个点是否已经被赋予颜色
+        color_assigned = np.zeros(len(lidar_points), dtype=bool)
 
         # 处理图像数据
         for sensor in frame_data.get('meta', {}).get('sensor', []):
@@ -297,6 +405,115 @@ if __name__ == '__main__':
             if cam_id not in ego_poses:
                 ego_poses[cam_id] = []
             ego_poses[cam_id].append(v2w)
+
+            # 获取相机参数
+            c2v = extr[cam_id][valid_frame_idx]  # 相机到自车的变换
+            v2c = np.linalg.inv(c2v)  # 自车到相机的变换
+            K = intr[cam_id][valid_frame_idx]  # 相机内参
+
+            # 将点云从自车坐标系转换到相机坐标系
+            points_cam = (v2c[:3, :3] @ lidar_points.T).T + v2c[:3, 3]
+            # 保存到前视120
+            if (cam_id == 'CAM_FRONT_120'):
+                points_cam_front120 = points_cam
+
+            # 过滤掉相机后方的点(z < 0)
+            front_mask = points_cam[:, 2] > 0
+            points_cam = points_cam[front_mask]
+
+            # 将点云投影到图像平面
+            points_img = (K[:3, :3] @ points_cam.T).T + K[:3, 3]
+            points_uv = (points_img[:, :2] /
+                         points_img[:, 2][:, None]).astype(int)
+
+            # 获取每个点的深度值
+            depths = points_cam[:, 2]
+
+            if (args.rimg):
+                # 创建rimg目录并保存点云投影图像
+                rimg_dir = os.path.join(save_dir, "rimg", cam_id)
+                os.makedirs(rimg_dir, exist_ok=True)
+                rimg_path = os.path.join(
+                    rimg_dir, f"{str(valid_frame_idx).zfill(6)}.png")
+
+                # 创建rimg图像
+                rimg = img.copy()
+                # 绘制投影点,使用基于深度的颜色
+                for i, uv in enumerate(points_uv):
+                    if 0 <= uv[0] < w and 0 <= uv[1] < h:
+                        # 获取基于深度的RGB颜色
+                        color = get_rgb_by_distance(
+                            depths[i], min_val=0, max_val=100)
+                        # OpenCV使用BGR顺序,需要反转RGB
+                        color_bgr = (int(color[2]), int(
+                            color[1]), int(color[0]))
+                        cv2.circle(rimg, tuple(uv), 1, color_bgr, -1)
+                cv2.imwrite(rimg_path, rimg)
+
+            if (args.lidar_depth):
+                # 创建深度图目录
+                depth_dir = os.path.join(save_dir, "lidar_depth", cam_id)
+                os.makedirs(depth_dir, exist_ok=True)
+                depth_path = os.path.join(
+                    depth_dir, f"{str(valid_frame_idx).zfill(6)}.npy")
+                # 创建稀疏深度图
+                depth_map = np.zeros((h, w), dtype=np.float32)
+                # 填充稀疏深度图
+                for i, uv in enumerate(points_uv):
+                    if 0 <= uv[0] < w and 0 <= uv[1] < h:
+                        depth_map[uv[1], uv[0]] = depths[i]
+                # 保存深度图为numpy数组
+                np.save(depth_path, depth_map)
+
+                # 创建深度图可视化
+                depth_vis = np.zeros_like(depth_map, dtype=np.uint8)
+                mask = depth_map > 0
+
+                # 使用jet颜色映射进行可视化
+                if np.any(mask):
+                    # 使用彩色映射进行可视化
+                    depth_color = cv2.applyColorMap(
+                        depth_vis, cv2.COLORMAP_JET)
+                    # 将没有深度值的区域设为黑色
+                    depth_color[~mask] = [0, 0, 0]
+                    # 保存彩色深度图可视化
+                    color_vis_path = os.path.join(
+                        depth_dir, f"{str(valid_frame_idx).zfill(6)}_vis.png")
+                    cv2.imwrite(color_vis_path, depth_color)
+
+            # 检查点是否在图像范围内
+            valid_mask = (points_uv[:, 0] >= 0) & (points_uv[:, 0] < w) & \
+                (points_uv[:, 1] >= 0) & (points_uv[:, 1] < h)
+
+            # 获取原始点云中的索引
+            valid_indices = np.where(front_mask)[0][valid_mask]
+
+            # 为未赋值的有效点采样颜色
+            for idx, uv in zip(valid_indices, points_uv[valid_mask]):
+                if not color_assigned[idx]:
+                    # 从图像中采样BGR颜色并转换为RGB
+                    color = img[uv[1], uv[0], ::-1] / 255.0
+                    colors[idx] = color
+                    color_assigned[idx] = True
+
+        # 保存完整点云数据到lidar目录
+        pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+        output_dir = os.path.join(save_dir, "lidar")
+        output_path = os.path.join(
+            output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
+        o3d.io.write_point_cloud(output_path, pcd)
+
+        # 只保存有颜色的点云数据到lidar_colored目录
+        valid_points = points_cam_front120[color_assigned]
+        valid_colors = colors[color_assigned]
+        colored_pcd = o3d.geometry.PointCloud()
+        colored_pcd.points = o3d.utility.Vector3dVector(valid_points)
+        colored_pcd.colors = o3d.utility.Vector3dVector(valid_colors)
+        colored_output_dir = os.path.join(save_dir, "lidar_colored")
+        colored_output_path = os.path.join(
+            colored_output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
+        o3d.io.write_point_cloud(colored_output_path, colored_pcd)
 
         # 处理3D边界框标注
         for obj in frame_data['annotations']:

@@ -4,13 +4,12 @@ import torch
 from pygame.locals import *
 from omegaconf import OmegaConf
 import os
-import pickle
-import open3d as o3d
 from gaussian_renderer import render
 from scene.gaussian_model import GaussianModel
 from sim.utils.sim_utils import create_cam, rt2pose, pose2rt, load_camera_cfg
 from scipy.spatial.transform import Rotation as SCR
 
+os.environ["SDL_AUDIODRIVER"] = "dummy"  # 禁用音频驱动
 
 class HugSimViewer:
     def __init__(self, model_path, camera_path, iteration=7000):

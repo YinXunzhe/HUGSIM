@@ -11,6 +11,7 @@ from argparse import ArgumentParser
 import gymnasium
 import sys
 import os
+os.environ["SDL_AUDIODRIVER"] = "dummy"  # 禁用音频驱动
 sys.path.append(os.getcwd())
 sys.path.append(os.getcwd() + "/sim")
 

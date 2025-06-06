@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 cuda=$1
 out=$2
 
