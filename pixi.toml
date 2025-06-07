@@ -11,9 +11,11 @@ install-apex = { cmd = "sh -c '[ -d apex ] || git clone https://github.com/NVIDI
 [dependencies]
 python = "==3.11.10"
 setuptools = "==78.1.0"
+pip = "*"         # 添加 pip 支持
+wheel = "*"       # wheel 是构建 C++ 扩展包的依赖（如 xformers）
 
 [pypi-options]
-no-build-isolation = ["gsplat", "pytorch3d", "tinycudann", "simple-knn"]
+no-build-isolation = ["gsplat", "pytorch3d", "tinycudann", "simple-knn","xformers"]
 
 [pypi-dependencies]
 torch = { version = "==2.4.1", index = "https://download.pytorch.org/whl/cu118" }
@@ -71,4 +73,4 @@ simple-waymo-open-dataset-reader = { git = "https://github.com/gdlg/simple-waymo
 pytorch3d = { git = "https://github.com/facebookresearch/pytorch3d.git", rev = "stable" }
 nuscenes-devkit = { git = "https://github.com/hyzhou404/nuscenes-devkit.git", rev = "master"}
 moviepy = ">=2.2.1, <3"
-
+xformers={git = "https://github.com/facebookresearch/xformers.git",rev="v0.0.28"}
