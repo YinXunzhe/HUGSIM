@@ -6,7 +6,7 @@ echo $cuda
 echo $out
 export CUDA_VISIBLE_DEVICES=$cuda
 
-arr=("CAM_FRONT_120"  "CAM_FRONT_LEFT"  "CAM_FRONT_RIGHT")
+arr=("CAM_FRONT_120"  "CAM_FRONT_LEFT"  "CAM_FRONT_RIGHT"  "CAM_BACK_LEFT" "CAM_BACK_RIGHT" "CAM_BACK")
 for cam in ${arr[@]}
 do
     echo ${cam}

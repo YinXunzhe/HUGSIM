@@ -1,120 +1,13 @@
 import numpy as np
 # import transforms3d as tr
-from datetime import datetime  # 用于时间戳解析
 from scipy.spatial.transform import Rotation as SCR  # 用于旋转矩阵计算
 import cv2  # OpenCV图像处理
 import json
 from tqdm import tqdm  # 进度条显示
-from datetime import datetime
 import os
 import argparse
 import open3d as o3d  # 用于3D点云处理
-
-
-def get_rgb_by_distance(cur_val, min_val=0, max_val=50):
-    jet_color_matrix = [0, 0, 0.5625,
-                        0, 0, 0.6250,
-                        0, 0, 0.6875,
-                        0, 0, 0.7500,
-                        0, 0, 0.8125,
-                        0, 0, 0.8750,
-                        0, 0, 0.9375,
-                        0, 0, 1,
-                        0, 0.0625, 1,
-                        0, 0.1250, 1,
-                        0, 0.1875, 1,
-                        0, 0.2500, 1,
-                        0, 0.3125, 1,
-                        0, 0.3750, 1,
-                        0, 0.4375, 1,
-                        0, 0.5000, 1,
-                        0, 0.5625, 1,
-                        0, 0.6250, 1,
-                        0, 0.6875, 1,
-                        0, 0.7500, 1,
-                        0, 0.8125, 1,
-                        0, 0.8750, 1,
-                        0, 0.9375, 1,
-                        0, 1, 1,
-                        0.0625, 1, 0.9375,
-                        0.1250, 1, 0.8750,
-                        0.1875, 1, 0.8125,
-                        0.2500, 1, 0.7500,
-                        0.3125, 1, 0.6875,
-                        0.3750, 1, 0.6250,
-                        0.4375, 1, 0.5625,
-                        0.5000, 1, 0.5000,
-                        0.5625, 1, 0.4375,
-                        0.6250, 1, 0.3750,
-                        0.6875, 1, 0.3125,
-                        0.7500, 1, 0.2500,
-                        0.8125, 1, 0.1875,
-                        0.8750, 1, 0.1250,
-                        0.9375, 1, 0.0625,
-                        1, 1, 0,
-                        1, 0.9375, 0,
-                        1, 0.8750, 0,
-                        1, 0.8125, 0,
-                        1, 0.7500, 0,
-                        1, 0.6875, 0,
-                        1, 0.6250, 0,
-                        1, 0.5625, 0,
-                        1, 0.5000, 0,
-                        1, 0.4375, 0,
-                        1, 0.3750, 0,
-                        1, 0.3125, 0,
-                        1, 0.2500, 0,
-                        1, 0.1875, 0,
-                        1, 0.1250, 0,
-                        1, 0.0625, 0,
-                        1, 0, 0,
-                        0.9375, 0, 0,
-                        0.8750, 0, 0,
-                        0.8125, 0, 0,
-                        0.7500, 0, 0,
-                        0.6875, 0, 0,
-                        0.6250, 0, 0,
-                        0.5625, 0, 0,
-                        0.5000, 0, 0]
-    jet_color_matrix = np.reshape(np.asarray(jet_color_matrix) * 255, (64, 3))
-    jet_color_matrix = jet_color_matrix.astype(dtype=np.uint8)
-
-    cur_val = np.clip(cur_val, min_val, max_val)
-    index = (cur_val - min_val) / max_val * 63
-    index = np.round(index).astype(np.int8)
-    rgb_val = jet_color_matrix[index, :]
-
-    return rgb_val
-
-
-# 为了和vertex里的坐标顺序为lhw匹配
-LHW_TO_LWH = np.array(
-    [
-        [1, 0, 0, 0],
-        [0, 0, 1, 0],
-        [0, -1, 0, 0],
-        [0, 0, 0, 1.0],
-    ]
-)
-
-
-def get_vertices(dim, bottom_center=np.array([0.0, 0.0, 0.0])):
-    '''
-    dim: length, height, width
-    bottom_center: center of bottom face of 3D bounding box
-
-    return: vertices of 3D bounding box (8*3)
-    '''
-    vertices = bottom_center[None, :].repeat(8, axis=0)
-    vertices[:4, 0] = vertices[:4, 0] + dim[0] / 2
-    vertices[4:, 0] = vertices[4:, 0] - dim[0] / 2
-    vertices[[0, 1, 4, 5], 1] = vertices[[0, 1, 4, 5], 1] + dim[1]/2
-    vertices[[2, 3, 6, 7], 1] = vertices[[2, 3, 6, 7], 1] - dim[1]/2
-    vertices[[0, 2, 5, 7], 2] = vertices[[0, 2, 5, 7], 2] + dim[2] / 2
-    vertices[[1, 3, 4, 6], 2] = vertices[[1, 3, 4, 6], 2] - dim[2] / 2
-
-    return vertices
-
+from utils import *
 
 def get_opts():
     """解析命令行参数"""
@@ -125,8 +18,6 @@ def get_opts():
                         help='要处理的数据段ID')
     parser.add_argument('--track_seq_id', type=int, required=True,
                         help='要处理的track数据段ID')
-    parser.add_argument('-c', '--cameras', nargs='+', type=str, required=True,
-                        help='要处理的相机ID列表')
     parser.add_argument('-o', '--outpath', type=str, required=True,
                         help='输出目录路径')
     parser.add_argument('--downsample', type=float, default=2,
@@ -137,21 +28,6 @@ def get_opts():
                         help='是否根据点云生成深度图像')
 
     return parser.parse_args()
-
-
-def parse_timestamp(filename):
-    """从文件名解析时间戳，格式为YYYY-MM-DD-HH-MM-SS-ffffff"""
-    # 提取时间戳部分（假设文件名结构为prefix_timestamp_suffix）
-    timestamp_str = filename.split('_')[1]
-    # 分割时间戳的各个部分
-    parts = timestamp_str.split('-')
-    if len(parts) != 7:
-        raise ValueError(f"无效的时间戳格式: {timestamp_str}")
-    # 组合成datetime可解析的字符串格式
-    dt_str = f"{parts[0]}-{parts[1]}-{parts[2]} {parts[3]}:{parts[4]}:{parts[5]}.{parts[6]}"
-    # 解析为datetime对象
-    dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S.%f")
-    return dt.timestamp()
 
 
 if __name__ == '__main__':
@@ -235,7 +111,7 @@ if __name__ == '__main__':
     # 创建输出目录结构
     save_dir = args.outpath
     os.makedirs(save_dir, exist_ok=True)
-    cams = args.cameras  # 要处理的相机ID列表
+    cams=AVAILABLE_CAMERAS
     # 为每个相机创建图像保存目录
     for cam in cams:
         os.makedirs(os.path.join(save_dir, "images", f"{cam}"), exist_ok=True)
@@ -272,7 +148,7 @@ if __name__ == '__main__':
         if timestamp_str in ego2world:
             v2w = np.array(ego2world[timestamp_str]).reshape(4, 4)
         else:
-            # 有时 meta json 中没有，跳过该帧
+            # 有时 meta json 中没有，该帧落盘有问题，跳过该帧
             continue
             # # 有时 meta json 中没有，则在odom中找对应时间戳的车辆位姿
             # idx = bisect.bisect_left(odom_timestamps, current_timestamp)
@@ -335,7 +211,7 @@ if __name__ == '__main__':
         # 处理图像数据
         for sensor in frame_data.get('meta', {}).get('sensor', []):
             cam_id = sensor.get('sensor_id')
-            if args.cameras and cam_id not in args.cameras:
+            if cams and cam_id not in cams:
                 continue
             data_path = sensor.get('data_path')
             if not data_path:
@@ -352,13 +228,20 @@ if __name__ == '__main__':
                 continue
             h, w = img.shape[:2]
             downsample_factor = args.downsample
-            # 截去前视引擎盖部分
-            engine_hood_pixels = 0
-            if (cam_id == 'CAM_FRONT_120'):
-                engine_hood_pixels = 512  # 原图引擎盖高度
+            
+            # 对称截去自车车体部分
+            ego_body_pixels = 0
+            if cam_id == 'CAM_FRONT_120':
+                ego_body_pixels = 512  # 前视Dedistort图引擎盖高度
                 # img = img[0:h, :]
-                img = img[engine_hood_pixels:h-engine_hood_pixels, :]
-                h = h-2*engine_hood_pixels
+                img = img[ego_body_pixels:h-ego_body_pixels, :]
+                h = h-2*ego_body_pixels
+            elif cam_id == 'CAM_BACK':
+                ego_body_pixels = 56  # 后视Dedistort图车尾高度
+                # img = img[0:h, :]
+                img = img[ego_body_pixels:h-ego_body_pixels, :]
+                h = h-2*ego_body_pixels                
+           
             if downsample_factor > 1:
                 h = int(h // downsample_factor)
                 w = int(w // downsample_factor)
@@ -379,9 +262,8 @@ if __name__ == '__main__':
             cam_intrinsic[0, 0] = params['intrinsic'][0][0] / downsample_factor
             cam_intrinsic[1, 1] = params['intrinsic'][1][1] / downsample_factor
             cam_intrinsic[0, 2] = params['intrinsic'][0][2] / downsample_factor
-            # cam_intrinsic[1, 2] = params['intrinsic'][1][2] / downsample_factor
             cam_intrinsic[1, 2] = (
-                params['intrinsic'][1][2] - engine_hood_pixels) / downsample_factor
+                params['intrinsic'][1][2] - ego_body_pixels) / downsample_factor
 
             if cam_id not in intr:
                 intr[cam_id] = []

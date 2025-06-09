@@ -90,7 +90,7 @@ def render_set(name:str, scene:Scene, background:torch.Tensor):
         elif scene.data_type == 'nuscenes' or scene.data_type == 'pandaset':
             gap = 6
         elif scene.data_type == 'zone':
-            gap = 3            
+            gap = 6            
             
         if idx - gap < 0:
             prev_view = views[0]

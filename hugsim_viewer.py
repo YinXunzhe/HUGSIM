@@ -140,25 +140,25 @@ class HugSimViewer:
 
             u_offset += 800
 
-        # # 渲染后视角
-        # u_offset = 0
-        # for cam_name in ['CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']:
-        #     v2c = self.cam_params[cam_name]["v2c"]
-        #     c2front = self.cam_params["CAM_FRONT"]["v2c"] @ np.linalg.inv(
-        #         v2c) @ self.cam_rect
-        #     cam_c2w = c2w @ c2front
+        # 渲染后视角
+        u_offset = 0
+        for cam_name in ['CAM_BACK_LEFT', 'CAM_BACK', 'CAM_BACK_RIGHT']:
+            v2c = self.cam_params[cam_name]["v2c"]
+            c2front = self.cam_params["CAM_FRONT"]["v2c"] @ np.linalg.inv(
+                v2c) @ self.cam_rect
+            cam_c2w = c2w @ c2front
 
-        #     viewpoint = create_cam(
-        #         self.cam_params[cam_name]["intrinsic"], cam_c2w)
-        #     render_pkg = render(viewpoint=viewpoint,
-        #                         prev_viewpoint=None, **self.render_kwargs)
+            viewpoint = create_cam(
+                self.cam_params[cam_name]["intrinsic"], cam_c2w)
+            render_pkg = render(viewpoint=viewpoint,
+                                prev_viewpoint=None, **self.render_kwargs)
 
-        #     rgb = (torch.permute(render_pkg['render'].clamp(
-        #         0, 1), (1, 2, 0)).detach().cpu().numpy() * 255).astype(np.uint8)
-        #     surface = pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
-        #     self.display.blit(surface, (u_offset, 550))
+            rgb = (torch.permute(render_pkg['render'].clamp(
+                0, 1), (1, 2, 0)).detach().cpu().numpy() * 255).astype(np.uint8)
+            surface = pygame.surfarray.make_surface(rgb.swapaxes(0, 1))
+            self.display.blit(surface, (u_offset, 550))
 
-        #     u_offset += 800
+            u_offset += 800
 
         # 显示相机位置信息
         color = (255, 255, 255)

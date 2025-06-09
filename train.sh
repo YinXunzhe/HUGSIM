@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export HUGSIM_WORKSPACE=$HOME/hugsim_workspace
+export HUGSIM_WORKSPACE=/workspace
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 seq_name=scene-20250317_161633_1

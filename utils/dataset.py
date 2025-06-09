@@ -13,7 +13,7 @@ class HUGSIM_dataset(Dataset):
         elif data_type == 'kitti':
             self.gap = 2
         elif data_type == 'zone':
-            self.gap = 3
+            self.gap = 6
         else:
             self.gap = 6
 
