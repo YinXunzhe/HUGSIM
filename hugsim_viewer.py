@@ -8,11 +8,12 @@ from gaussian_renderer import render
 from scene.gaussian_model import GaussianModel
 from sim.utils.sim_utils import create_cam, rt2pose, pose2rt, load_camera_cfg
 from scipy.spatial.transform import Rotation as SCR
+from argparse import ArgumentParser
 
 os.environ["SDL_AUDIODRIVER"] = "dummy"  # 禁用音频驱动
 
 class HugSimViewer:
-    def __init__(self, model_path, camera_path, iteration=7000):
+    def __init__(self, cfg,iteration=30000):
         pygame.init()
         pygame.font.init()
 
@@ -24,15 +25,15 @@ class HugSimViewer:
         self.font = pygame.font.Font(pygame.font.get_default_font(), 20)
 
         # 加载模型
-        self.gaussians = GaussianModel(3)  # sh_degree=3
+        self.gaussians = GaussianModel(cfg.model.sh_degree, affine=cfg.affine)
         (model_params, _) = torch.load(
             os.path.join(model_path, "ckpts", f"chkpnt{iteration}.pth"),
             weights_only=False)
+        # (model_params, iteration) = torch.load(os.path.join(cfg.model_path, "scene.pth"), weights_only=False)            
         self.gaussians.restore(model_params, None)
 
         # 加载相机配置
-        self.cam_params, _, self.cam_rect = load_camera_cfg(
-            OmegaConf.load(camera_path))
+        self.cam_params, _, self.cam_rect = load_camera_cfg(cfg.camera)
 
         # 相机控制参数
         self.camera_pos = np.array([0.0, 0.0, 0.0])  # 相机位置
@@ -184,15 +185,32 @@ class HugSimViewer:
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, required=True,
-                        help="Path to the trained model")
-    parser.add_argument("--camera_path", type=str, default="./configs/sim/zone_camera.yaml",
-                        help="Path to camera configuration file")
+
+    # Set up command line argument parser
+    parser = ArgumentParser(description="Testing script parameters")
+    parser.add_argument("--scenario_path", type=str, required=True)
+    parser.add_argument("--base_path", type=str, required=True)
+    parser.add_argument("--camera_path", type=str, required=True)
+    parser.add_argument("--kinematic_path", type=str, required=False)
+
     parser.add_argument("--iteration", type=int, default=30000,
-                        help="Iteration number of the model to load")
+                        help="Iteration number of the model to load")    
     args = parser.parse_args()
 
-    viewer = HugSimViewer(args.model_path, args.camera_path, args.iteration)
+    scenario_config = OmegaConf.load(args.scenario_path)
+    base_config = OmegaConf.load(args.base_path)
+    camera_config = OmegaConf.load(args.camera_path)
+
+    cfg = OmegaConf.merge(
+        {"scenario": scenario_config},
+        {"base": base_config},
+        {"camera": camera_config}
+    )
+
+    model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name)
+    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported")
+    model_config = OmegaConf.load(os.path.join(model_path, 'cfg.yaml'))
+    cfg.update(model_config)
+
+    viewer = HugSimViewer(cfg, args.iteration)
     viewer.run()

@@ -225,7 +225,7 @@ if __name__ == "__main__":
     cfg.base.output_dir = cfg.base.output_dir + "/manual"
 
     model_path = os.path.join(
-        cfg.base.model_base, cfg.scenario.scene_name)
+        cfg.base.model_base, cfg.scenario.scene_name,"exported")
     model_config = OmegaConf.load(os.path.join(model_path, 'cfg.yaml'))
     cfg.update(model_config)
 
