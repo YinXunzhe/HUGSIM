@@ -96,9 +96,9 @@ def render_set(name:str, scene:Scene, background:torch.Tensor):
             prev_view = views[0]
         else:
             prev_view = views[idx-gap]
-            
+        unicycles = {}    
         render_pkg = render(
-            view, prev_view, scene.gaussians, scene.dynamic_gaussians, scene.unicycles, background, True
+            view, prev_view, scene.gaussians, scene.dynamic_gaussians, unicycles, background, True
         )
         rendering = render_pkg['render'].detach().cpu()
         semantic = render_pkg['feats'].detach().cpu()
