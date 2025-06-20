@@ -1,6 +1,6 @@
 import numpy as np
 # import transforms3d as tr
-from scipy.spatial.transform import Rotation as SCR  # 用于旋转矩阵计算
+from scipy.spatial.transform import Rotation as R  # 用于旋转矩阵计算
 import cv2  # OpenCV图像处理
 import json
 from tqdm import tqdm  # 进度条显示
@@ -24,7 +24,7 @@ def get_opts():
                         help='图像下采样率，默认为2')
     parser.add_argument('--rimg', action="store_true", default=False,
                         help='是否生成rimg图像'),
-    parser.add_argument('--lidar_depth', action="store_true", default=False,
+    parser.add_argument('--lidar_depth', action="store_true", default=True,
                         help='是否根据点云生成深度图像')
 
     return parser.parse_args()
@@ -271,7 +271,7 @@ if __name__ == '__main__':
 
             # 从四元数(wxyz)构建旋转矩阵
             quat = params['sensor2ego_rotation']
-            rot = SCR.from_quat(
+            rot = R.from_quat(
                 [quat[1], quat[2], quat[3], quat[0]]).as_matrix()
 
             # 构建相机到车辆的变换矩阵
@@ -293,46 +293,25 @@ if __name__ == '__main__':
             v2c = np.linalg.inv(c2v)  # 自车到相机的变换
             K = intr[cam_id][valid_frame_idx]  # 相机内参
 
-            # 将点云从自车坐标系转换到相机坐标系
-            points_cam = (v2c[:3, :3] @ lidar_points.T).T + v2c[:3, 3]
-            # 保存到前视120
-            if (cam_id == 'CAM_FRONT_120'):
-                points_cam_front120 = points_cam
-
-            # 过滤掉相机后方的点(z < 0)
-            front_mask = points_cam[:, 2] > 0
-            points_cam = points_cam[front_mask]
-
-            # 将点云投影到图像平面
-            points_img = (K[:3, :3] @ points_cam.T).T + K[:3, 3]
-            points_uv = (points_img[:, :2] /
-                         points_img[:, 2][:, None]).astype(int)
-
-            # 获取每个点的深度值
-            depths = points_cam[:, 2]
-
-            if (args.rimg):
-                # 创建rimg目录并保存点云投影图像
-                rimg_dir = os.path.join(save_dir, "rimg", cam_id)
-                os.makedirs(rimg_dir, exist_ok=True)
-                rimg_path = os.path.join(
-                    rimg_dir, f"{str(valid_frame_idx).zfill(6)}.png")
-
-                # 创建rimg图像
-                rimg = img.copy()
-                # 绘制投影点,使用基于深度的颜色
-                for i, uv in enumerate(points_uv):
-                    if 0 <= uv[0] < w and 0 <= uv[1] < h:
-                        # 获取基于深度的RGB颜色
-                        color = get_rgb_by_distance(
-                            depths[i], min_val=0, max_val=100)
-                        # OpenCV使用BGR顺序,需要反转RGB
-                        color_bgr = (int(color[2]), int(
-                            color[1]), int(color[0]))
-                        cv2.circle(rimg, tuple(uv), 1, color_bgr, -1)
-                cv2.imwrite(rimg_path, rimg)
-
             if (args.lidar_depth):
+                # 将点云从自车坐标系转换到相机坐标系
+                points_cam = (v2c[:3, :3] @ lidar_points.T).T + v2c[:3, 3]
+                # 保存转换到前视120坐标系下的点云
+                if (cam_id == 'CAM_FRONT_120'):
+                    points_cam_front120 = points_cam
+
+                # 过滤掉相机后方的点(z < 0)
+                front_mask = points_cam[:, 2] > 0
+                points_cam = points_cam[front_mask]
+
+                # 将点云投影到图像平面
+                points_img = (K[:3, :3] @ points_cam.T).T + K[:3, 3]
+                points_uv = (points_img[:, :2] /
+                            points_img[:, 2][:, None]).astype(int)
+
+                # 获取每个点的深度值
+                depths = points_cam[:, 2]
+
                 # 创建深度图目录
                 depth_dir = os.path.join(save_dir, "lidar_depth", cam_id)
                 os.makedirs(depth_dir, exist_ok=True)
@@ -347,55 +326,76 @@ if __name__ == '__main__':
                 # 保存深度图为numpy数组
                 np.save(depth_path, depth_map)
 
-                # 创建深度图可视化
-                depth_vis = np.zeros_like(depth_map, dtype=np.uint8)
-                mask = depth_map > 0
+                # # 创建深度图可视化
+                # depth_vis = np.zeros_like(depth_map, dtype=np.uint8)
+                # mask = depth_map > 0
 
-                # 使用jet颜色映射进行可视化
-                if np.any(mask):
-                    # 使用彩色映射进行可视化
-                    depth_color = cv2.applyColorMap(
-                        depth_vis, cv2.COLORMAP_JET)
-                    # 将没有深度值的区域设为黑色
-                    depth_color[~mask] = [0, 0, 0]
-                    # 保存彩色深度图可视化
-                    color_vis_path = os.path.join(
-                        depth_dir, f"{str(valid_frame_idx).zfill(6)}_vis.png")
-                    cv2.imwrite(color_vis_path, depth_color)
+                # # 使用jet颜色映射进行可视化
+                # if np.any(mask):
+                #     # 使用彩色映射进行可视化
+                #     depth_color = cv2.applyColorMap(
+                #         depth_vis, cv2.COLORMAP_JET)
+                #     # 将没有深度值的区域设为黑色
+                #     depth_color[~mask] = [0, 0, 0]
+                #     # 保存彩色深度图可视化
+                #     color_vis_path = os.path.join(
+                #         depth_dir, f"{str(valid_frame_idx).zfill(6)}_vis.png")
+                #     cv2.imwrite(color_vis_path, depth_color)
 
-            # 检查点是否在图像范围内
-            valid_mask = (points_uv[:, 0] >= 0) & (points_uv[:, 0] < w) & \
-                (points_uv[:, 1] >= 0) & (points_uv[:, 1] < h)
+                # 检查点是否在图像范围内
+                valid_mask = (points_uv[:, 0] >= 0) & (points_uv[:, 0] < w) & \
+                    (points_uv[:, 1] >= 0) & (points_uv[:, 1] < h)
 
-            # 获取原始点云中的索引
-            valid_indices = np.where(front_mask)[0][valid_mask]
+                # 获取原始点云中的索引
+                valid_indices = np.where(front_mask)[0][valid_mask]
 
-            # 为未赋值的有效点采样颜色
-            for idx, uv in zip(valid_indices, points_uv[valid_mask]):
-                if not color_assigned[idx]:
-                    # 从图像中采样BGR颜色并转换为RGB
-                    color = img[uv[1], uv[0], ::-1] / 255.0
-                    colors[idx] = color
-                    color_assigned[idx] = True
+                # 为未赋值的有效点采样颜色
+                for idx, uv in zip(valid_indices, points_uv[valid_mask]):
+                    if not color_assigned[idx]:
+                        # 从图像中采样BGR颜色并转换为RGB
+                        color = img[uv[1], uv[0], ::-1] / 255.0
+                        colors[idx] = color
+                        color_assigned[idx] = True
 
-        # 保存完整点云数据到lidar目录
-        pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-        output_dir = os.path.join(save_dir, "lidar")
-        output_path = os.path.join(
-            output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
-        o3d.io.write_point_cloud(output_path, pcd)
+                if (args.rimg):
+                    # 创建rimg目录并保存点云投影图像
+                    rimg_dir = os.path.join(save_dir, "rimg", cam_id)
+                    os.makedirs(rimg_dir, exist_ok=True)
+                    rimg_path = os.path.join(
+                        rimg_dir, f"{str(valid_frame_idx).zfill(6)}.png")
 
-        # 只保存有颜色的点云数据到lidar_colored目录
-        valid_points = points_cam_front120[color_assigned]
-        valid_colors = colors[color_assigned]
-        colored_pcd = o3d.geometry.PointCloud()
-        colored_pcd.points = o3d.utility.Vector3dVector(valid_points)
-        colored_pcd.colors = o3d.utility.Vector3dVector(valid_colors)
-        colored_output_dir = os.path.join(save_dir, "lidar_colored")
-        colored_output_path = os.path.join(
-            colored_output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
-        o3d.io.write_point_cloud(colored_output_path, colored_pcd)
+                    # 创建rimg图像
+                    rimg = img.copy()
+                    # 绘制投影点,使用基于深度的颜色
+                    for i, uv in enumerate(points_uv):
+                        if 0 <= uv[0] < w and 0 <= uv[1] < h:
+                            # 获取基于深度的RGB颜色
+                            color = get_rgb_by_distance(
+                                depths[i], min_val=0, max_val=100)
+                            # OpenCV使用BGR顺序,需要反转RGB
+                            color_bgr = (int(color[2]), int(
+                                color[1]), int(color[0]))
+                            cv2.circle(rimg, tuple(uv), 1, color_bgr, -1)
+                    cv2.imwrite(rimg_path, rimg)
+
+                # 保存完整点云数据到lidar目录
+                pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
+                pcd.colors = o3d.utility.Vector3dVector(colors)
+                output_dir = os.path.join(save_dir, "lidar")
+                output_path = os.path.join(
+                    output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
+                o3d.io.write_point_cloud(output_path, pcd)
+
+                # 只保存有颜色的点云数据到lidar_colored目录
+                valid_points = points_cam_front120[color_assigned]
+                valid_colors = colors[color_assigned]
+                colored_pcd = o3d.geometry.PointCloud()
+                colored_pcd.points = o3d.utility.Vector3dVector(valid_points)
+                colored_pcd.colors = o3d.utility.Vector3dVector(valid_colors)
+                colored_output_dir = os.path.join(save_dir, "lidar_colored")
+                colored_output_path = os.path.join(
+                    colored_output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
+                o3d.io.write_point_cloud(colored_output_path, colored_pcd)
 
         # 处理3D边界框标注
         for obj in frame_data['annotations']:
@@ -423,7 +423,7 @@ if __name__ == '__main__':
 
                 # 计算Box到自车的转换矩阵b2v
                 # 首先创建旋转矩阵，考虑roll、pitch、yaw
-                rot_matrix = SCR.from_euler(
+                rot_matrix = R.from_euler(
                     'zxy', [yaw, roll, pitch]).as_matrix()
 
                 b2v = np.eye(4)
@@ -620,3 +620,25 @@ if __name__ == '__main__':
     # 保存前置相机信息
     with open(os.path.join(args.outpath, 'front_info.json'), 'w') as f:
         json.dump(front_cam_info, f, indent=2)
+
+    # save camera relative pose for rigid bundle adjustment
+    cam_rigid = dict()
+    cam_rigid["ref_camera_id"] = 1
+    rigid_cam_list = []
+    ref_extrinsic =  extr['CAM_FRONT_120'][0]
+    for iid, cam_name in enumerate(AVAILABLE_CAMERAS):
+        rigid_cam = dict()
+        rigid_cam["camera_id"] = iid+1
+
+        cur_extrinsic =  extr[cam_name][0]
+        rel_extrinsic = np.linalg.inv(cur_extrinsic) @ ref_extrinsic
+        r = R.from_matrix(rel_extrinsic[:3, :3])
+        qvec = r.as_quat()
+        rigid_cam["image_prefix"] = f'{cam_name}/'        
+        rigid_cam['cam_from_rig_rotation'] = [qvec[3], qvec[0], qvec[1], qvec[2]]
+        rigid_cam['cam_from_rig_translation'] = [rel_extrinsic[0, 3], rel_extrinsic[1, 3], rel_extrinsic[2, 3]]
+        rigid_cam_list.append(rigid_cam)
+
+    cam_rigid["cameras"] = rigid_cam_list
+    with open(os.path.join(args.outpath, "cam_rigid_config.json"), "w") as f:
+        json.dump([cam_rigid], f, indent=4)           
