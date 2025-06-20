@@ -1,0 +1,65 @@
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Shanghai
+
+#设置代理
+ARG http_proxy
+ARG https_proxy
+ENV http_proxy=${http_proxy}
+ENV https_proxy=${https_proxy}
+
+# 替换Ubuntu源为清华源
+RUN sed -i 's@archive.ubuntu.com@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list && \
+    sed -i 's@security.ubuntu.com@mirrors.tuna.tsinghua.edu.cn@g' /etc/apt/sources.list
+
+# 安装基础工具以及colmap的依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl git ca-certificates \
+    sudo zsh vim\
+    libx11-6  libxext6\
+    libxrender1  libxrandr2\
+    libxcursor1\
+    libxi6\
+    libgl1  libglib2.0-0\
+    ffmpeg\
+    cmake \
+    ninja-build \
+    build-essential \
+    libboost-program-options-dev \
+    libboost-graph-dev \
+    libboost-system-dev \
+    libeigen3-dev \
+    libflann-dev \
+    libfreeimage-dev \
+    libmetis-dev \
+    libgoogle-glog-dev \
+    libgtest-dev \
+    libgmock-dev \
+    libsqlite3-dev \
+    libglew-dev \
+    qtbase5-dev \
+    libqt5opengl5-dev \
+    libcgal-dev \
+    libceres-dev\    
+    && rm -rf /var/lib/apt/lists/*
+
+# 清理缓存
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+
+
+ARG HOST_UID=1000
+ARG HOST_GID=1000
+ARG HOST_USER=hostuser
+ARG HOST_GROUP=hostgroup
+
+# 创建组
+RUN groupadd -g ${HOST_GID} ${HOST_GROUP} && \
+    useradd -u ${HOST_UID} -g ${HOST_GID} -m ${HOST_USER}
+
+# Add sudo support
+RUN echo "%${HOST_GROUP}  ALL = (ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# 安装 pixi
+RUN curl -fsSL https://pixi.sh/install.sh | sh
