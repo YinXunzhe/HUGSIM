@@ -70,6 +70,7 @@ class Scene:
         if self.loaded_iter:
             (model_params, first_iter) = torch.load(os.path.join(self.model_path, "ckpts", f"chkpnt{self.loaded_iter}.pth"))
             gaussians.restore(model_params, None)
+            gaussians.max_radii2D = torch.zeros((gaussians.get_xyz.shape[0]), device="cuda")
             for iid, dynamic_gaussian in self.dynamic_gaussians.items():
                 if planning is None or iid not in planning:
                     (model_params, first_iter) = torch.load(os.path.join(self.model_path, "ckpts", f"dynamic_{iid}_chkpnt{self.loaded_iter}.pth"))
@@ -79,6 +80,7 @@ class Scene:
                     model_params = list(model_params)
                     model_params.append(None)
                     dynamic_gaussian.restore(model_params, None)
+                dynamic_gaussian.max_radii2D = torch.zeros((dynamic_gaussian.get_xyz.shape[0]), device="cuda")
             # for iid, unicycle_pkg in self.unicycles.items():
             #     model_params = torch.load(os.path.join(self.model_path, "ckpts", f"unicycle_{iid}_chkpnt{self.loaded_iter}.pth"))
             #     unicycle_pkg['model'].restore(model_params)

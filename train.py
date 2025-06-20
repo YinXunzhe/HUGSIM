@@ -36,12 +36,16 @@ def training(cfg):
         cam_poses, _, _ = pickle.load(f)
         cam_positions = torch.tensor(cam_poses[:, :3, 3]).float().cuda()
 
-    first_iter = 0
     prepare_output(cfg)
     (ground_model_params, _) = torch.load(os.path.join(cfg.model_path, "ckpts", f"ground_chkpnt30000.pth"))
     gaussians = GaussianModel(cfg.model.sh_degree, feat_mutable=True, affine=cfg.affine, ground_args=ground_model_params)
-    scene = Scene(cfg, gaussians, data_type=cfg.data_type)
-    
+    scene = Scene(cfg, gaussians, data_type=cfg.data_type, load_iteration=None)  #restore from saved max iter check: load_iteration=-1
+    if scene.loaded_iter:
+        first_iter=scene.loaded_iter
+    else:
+        first_iter = 0
+
+
     scene.gaussians.training_setup(cfg.opt)
     for iid, dynamic_gaussian in scene.dynamic_gaussians.items():
         dynamic_gaussian.training_setup(cfg.opt)
