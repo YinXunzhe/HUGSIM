@@ -99,7 +99,7 @@ def training(cfg):
         w2c = torch.linalg.inv(viewpoint_cam.c2w)
         points = gaussians.get_xyz
         c_points = (w2c[:3, :3] @ points.T).T + w2c[:3, 3]
-        biases = -cfg.ground.min + cfg.ground.range * torch.rand(cfg.ground.n_sample, device='cuda')
+        biases = cfg.ground.min + cfg.ground.range * torch.rand(cfg.ground.n_sample, device='cuda')
         for bias in biases:
             mask = (bias < c_points[:, 2]) & (c_points[:, 2] < (bias + cfg.ground.grid_len)) 
             if torch.sum(mask) == 0:
