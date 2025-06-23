@@ -73,7 +73,7 @@ class HUGSimEnv(gymnasium.Env):
         for plan_id in self.planner.ckpts.keys():
             dynamic_gaussians[plan_id] = ObjModel(cfg.model.sh_degree, feat_mutable=False)
             (model_params, iteration) = torch.load(self.planner.ckpts[plan_id], weights_only=False)
-            model_params = list(model_params)
+            model_params = list(model_params)[:9]
             dynamic_gaussians[plan_id].restore(model_params, None)
             
         semantic_idx = torch.argmax(self.gaussians.get_full_3D_features, dim=-1, keepdim=True)

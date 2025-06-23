@@ -20,7 +20,7 @@ if __name__ == "__main__":
         print(f"Loading {vehicle_file} ...")
         gaussians = ObjModel(3, feat_mutable=False)
         (model_params, first_iter) = torch.load(vehicle_file, weights_only=False)
-        model_params = list(model_params)
+        model_params = list(model_params)[:9]
         gaussians.restore(model_params, None)
         print(f"Saving {vehicle_name} as inria ply and splat format ...")
         gaussians.save_splat(os.path.join(args.vehicle_path, "converted", f"{vehicle_name}.ply"), os.path.join(args.vehicle_path, "converted", f"{vehicle_name}.splat"))
