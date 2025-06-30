@@ -1,0 +1,22 @@
+mode: easy_02
+plan_list: 
+- - 0 #x
+  - 10 #z
+  - -0.30 #height
+  - 0 # start aw is based on ego car's orientation. 0 means same direction as ego.  Right is positive and left is negative.
+  - 10 #start velo
+  - "2024_07_05_10_58_02"
+  - ConstantPlanner
+  - {}
+load_HD_map: false
+start_euler:
+- 0.0
+- 0.0
+- 0.0
+start_ab:
+- 0.0
+- 0.0
+start_velo: 1
+start_steer: 0
+scene_name: scene-20250304_154844_2
+iteration: 30000

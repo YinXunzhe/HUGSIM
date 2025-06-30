@@ -10,41 +10,6 @@ import argparse
 from sklearn import linear_model
 
 
-def segment_ground_ransac(points, colors, max_distance=0.3, max_iterations=1000):
-    """
-    在相机坐标系中分割地面点云（地面是y轴最大的平面）
-    参数:
-        points: 点云坐标数组 (N,3)
-        colors: 点云颜色数组 (N,3)
-        max_distance: 点到平面的最大距离阈值
-        max_iterations: RANSAC最大迭代次数
-    返回:
-        非地面点云和对应颜色
-    """
-
-    # 因为地面是y最大的平面，我们翻转y坐标使地面变为"最低"平面
-    flipped_points = points.copy()
-    flipped_points[:, 1] = -flipped_points[:, 1]  # 翻转y轴
-
-    # 使用RANSAC拟合平面（现在地面是y最小的平面）
-    ransac = linear_model.RANSACRegressor(
-        linear_model.LinearRegression(),
-        residual_threshold=max_distance,
-        max_trials=max_iterations
-    )
-
-    # 使用X和Z坐标来预测Y坐标（拟合平面方程）
-    X = flipped_points[:, [0, 2]]  # 使用X和Z坐标
-    y = flipped_points[:, 1]       # 拟合Y坐标
-
-    ransac.fit(X, y)
-
-    # 地面点是inliers，我们需要非地面点
-    non_ground_mask = ~ransac.inlier_mask_
-
-    return points[non_ground_mask], colors[non_ground_mask]
-
-
 def get_opts():
     parser = argparse.ArgumentParser()
     parser.add_argument('--out', type=str, required=True)

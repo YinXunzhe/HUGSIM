@@ -2,5 +2,5 @@ realcar_path: /workspace/3DRealCar
 model_base: /workspace/models/zone/
 uniad_path: /nas/users/hyzhou/code/UniAD_Sim/tools/e2e.sh
 vad_path: /nas/users/hyzhou/code/VAD_Sim/tools/e2e.sh
-ltf_path: /nas/users/hyzhou/code/navsim/ltf_e2e.sh
+ltf_path: /workspace/NAVSIM/ltf_e2e.sh
 output_dir: /workspace/outputs

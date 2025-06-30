@@ -8,7 +8,7 @@ start_euler:
 start_ab:
 - 0.0
 - 0.0
-start_velo: 1
+start_velo: 2
 start_steer: 0
 scene_name: scene-20250317_161633_1
 iteration: 30000

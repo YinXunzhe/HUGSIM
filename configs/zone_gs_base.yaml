@@ -1,5 +1,5 @@
 model:
-  sh_degree: 1
+  sh_degree: 3
   data_device: "cpu"
   white_background: False
   convert_SHs_python: False

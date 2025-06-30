@@ -126,9 +126,9 @@ if __name__ == "__main__":
         {"camera": camera_config},
         {"kinematic": kinematic_config}
     )
-    cfg.base.output_dir = cfg.base.output_dir + args.ad
+    cfg.base.output_dir =os.path.join( cfg.base.output_dir ,args.ad)
 
-    model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name)
+    model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported")
     model_config = OmegaConf.load(os.path.join(model_path, 'cfg.yaml'))
     cfg.update(model_config)
     
