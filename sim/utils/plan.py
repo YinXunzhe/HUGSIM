@@ -123,7 +123,7 @@ class planner:
             h = self.ground_height(next_xyrv[0].numpy(), next_xyrv[1].numpy())
             if type(controller) is UnicyclePlanner:
                 # b2w[:3, :3] = SCR.from_euler('xzy', [pitch_roll[0], pitch_roll[1], stat[3]]).as_matrix()
-                b2w[:3, :3] = SCR.from_euler('y', [-stat[3]]).as_matrix()
+                b2w[:3, :3] = SCR.from_euler('y', [-stat[3]+np.pi / 2 - self.rectify_angle]).as_matrix()
                 b2w[:3, 3] = np.array([next_stat[0], h + stat[2], next_stat[1]])
             else:
                 b2w[:3, :3] = SCR.from_euler('y', [-stat[3] - np.pi / 2 - self.rectify_angle]).as_matrix()

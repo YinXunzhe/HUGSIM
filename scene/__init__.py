@@ -38,6 +38,7 @@ class Scene:
         self.loaded_iter = None
         self.gaussians = gaussians
         self.data_type = data_type
+        self.unicycles = {}
 
         if load_iteration:
             if load_iteration == -1:
@@ -81,9 +82,9 @@ class Scene:
                     model_params.append(None)
                     dynamic_gaussian.restore(model_params, None)
                 dynamic_gaussian.max_radii2D = torch.zeros((dynamic_gaussian.get_xyz.shape[0]), device="cuda")
-            # for iid, unicycle_pkg in self.unicycles.items():
-            #     model_params = torch.load(os.path.join(self.model_path, "ckpts", f"unicycle_{iid}_chkpnt{self.loaded_iter}.pth"))
-            #     unicycle_pkg['model'].restore(model_params)
+            for iid, unicycle_pkg in self.unicycles.items():
+                model_params = torch.load(os.path.join(self.model_path, "ckpts", f"unicycle_{iid}_chkpnt{self.loaded_iter}.pth"))
+                unicycle_pkg['model'].restore(model_params)
 
         else:
             self.gaussians.create_from_pcd(scene_info.point_cloud, self.cameras_extent)
