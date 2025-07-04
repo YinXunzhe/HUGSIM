@@ -201,12 +201,9 @@ if __name__ == '__main__':
         #     np.abs(lidar_points[:, 1]) < 3)
         # lidar_points = lidar_points[ground_mask]
 
-        # 创建Open3D点云对象
-        pcd = o3d.geometry.PointCloud()
-        # 初始化点云颜色数组，默认为黑色
-        colors = np.zeros((len(lidar_points), 3))
-        # 记录每个点是否已经被赋予颜色
-        color_assigned = np.zeros(len(lidar_points), dtype=bool)
+        # 记录每个点的最佳深度和颜色
+        best_depths = np.full(len(lidar_points), np.inf)
+        best_colors = np.zeros((len(lidar_points), 3))
 
         # 处理图像数据
         for sensor in frame_data.get('meta', {}).get('sensor', []):
@@ -293,109 +290,109 @@ if __name__ == '__main__':
             v2c = np.linalg.inv(c2v)  # 自车到相机的变换
             K = intr[cam_id][valid_frame_idx]  # 相机内参
 
-            if (args.lidar_depth):
-                # 将点云从自车坐标系转换到相机坐标系
+            if args.lidar_depth:
+                # 1. 点云转换到相机坐标系
                 points_cam = (v2c[:3, :3] @ lidar_points.T).T + v2c[:3, 3]
-                # 保存转换到前视120坐标系下的点云
-                if (cam_id == 'CAM_FRONT_120'):
-                    points_cam_front120 = points_cam
 
-                # 过滤掉相机后方的点(z < 0)
+                if cam_id == 'CAM_FRONT_120':
+                    points_cam_front120 = points_cam.copy()
+
+                # 2. 深度图生成
+                depth_dir = os.path.join(save_dir, "lidar_depth", cam_id)
+                os.makedirs(depth_dir, exist_ok=True)
+                depth_path = os.path.join(depth_dir, f"{str(valid_frame_idx).zfill(6)}.npy")
+
+                # 只处理相机前方的点
                 front_mask = points_cam[:, 2] > 0
                 points_cam = points_cam[front_mask]
 
-                # 将点云投影到图像平面
+                # 投影到图像平面
                 points_img = (K[:3, :3] @ points_cam.T).T + K[:3, 3]
-                points_uv = (points_img[:, :2] /
-                            points_img[:, 2][:, None]).astype(int)
-
-                # 获取每个点的深度值
+                points_uv = (points_img[:, :2] / points_img[:, 2][:, None])
+                points_uv_int = np.round(points_uv).astype(int)
                 depths = points_cam[:, 2]
 
-                # 创建深度图目录
-                depth_dir = os.path.join(save_dir, "lidar_depth", cam_id)
-                os.makedirs(depth_dir, exist_ok=True)
-                depth_path = os.path.join(
-                    depth_dir, f"{str(valid_frame_idx).zfill(6)}.npy")
-                # 创建稀疏深度图
+                # 深度图填充
                 depth_map = np.zeros((h, w), dtype=np.float32)
-                # 填充稀疏深度图
-                for i, uv in enumerate(points_uv):
-                    if 0 <= uv[0] < w and 0 <= uv[1] < h:
-                        depth_map[uv[1], uv[0]] = depths[i]
-                # 保存深度图为numpy数组
+                u, v = points_uv_int[:, 0], points_uv_int[:, 1]
+                valid_uv_mask = (u >= 0) & (u < w) & (v >= 0) & (v < h)
+
+                # 不同的点云可能投影到同一个像素,这时应取深度最小的点 
+                u_valid, v_valid, d_valid = u[valid_uv_mask], v[valid_uv_mask], depths[valid_uv_mask]
+                flat_idx = v_valid * w + u_valid
+                # 对有效像素基于深度排序后的索引
+                sorted_idx = np.argsort(d_valid)
+                # 对于重复像素，保留深度最小的点
+                unique_flat, unique_indices = np.unique(flat_idx[sorted_idx], return_index=True)
+                # 选中的点云在valid数组中的原始索引
+                selected_idx = sorted_idx[unique_indices]
+
+                depth_map[v_valid[selected_idx], u_valid[selected_idx]] = d_valid[selected_idx]
                 np.save(depth_path, depth_map)
 
-                # # 创建深度图可视化
-                # depth_vis = np.zeros_like(depth_map, dtype=np.uint8)
-                # mask = depth_map > 0
+                # 3. 深度图可视化
+                mask = depth_map > 0
+                if np.any(mask):
+                    min_depth, max_depth = depth_map[mask].min(), depth_map[mask].max()
+                    depth_normalized = np.zeros_like(depth_map, dtype=np.uint8)
+                    depth_normalized[mask] = ((depth_map[mask] - min_depth) / (max_depth - min_depth) * 255).astype(np.uint8)
+                    depth_color = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_JET)
+                    depth_color[~mask] = 0
+                    cv2.imwrite(os.path.join(depth_dir, f"{str(valid_frame_idx).zfill(6)}_vis.png"), depth_color)
 
-                # # 使用jet颜色映射进行可视化
-                # if np.any(mask):
-                #     # 使用彩色映射进行可视化
-                #     depth_color = cv2.applyColorMap(
-                #         depth_vis, cv2.COLORMAP_JET)
-                #     # 将没有深度值的区域设为黑色
-                #     depth_color[~mask] = [0, 0, 0]
-                #     # 保存彩色深度图可视化
-                #     color_vis_path = os.path.join(
-                #         depth_dir, f"{str(valid_frame_idx).zfill(6)}_vis.png")
-                #     cv2.imwrite(color_vis_path, depth_color)
+                # 4. 点云最近表面着色：每个点只保留最接近的相机的颜色观测
+                # 有效点点云的全局索引
+                valid_indices = np.where(front_mask)[0][valid_uv_mask]
+                valid_depths=depths[valid_uv_mask]
+                # 1. 预计算所有需要更新的点云索引
+                update_indices = valid_indices[selected_idx]
+                # 2. 提取所有候选深度值
+                candidate_depths = valid_depths[selected_idx]
+                # 3. 创建更新掩码（向量化比较）
+                update_mask = candidate_depths < best_depths[update_indices]
+                # 4. 提取需要更新的点云索引
+                final_update_indices = update_indices[update_mask]
+                # 5. 提取对应的像素坐标（向量化）
+                u_pix = u_valid[selected_idx][update_mask].astype(int)
+                v_pix = v_valid[selected_idx][update_mask].astype(int)
+                # 6. 批量提取和转换颜色（向量化）
+                # 注意：OpenCV使用BGR格式，[::-1]转换为RGB
+                update_colors = img[v_pix, u_pix, :][:, ::-1] / 255.0
+                # 7. 批量更新深度和颜色
+                best_depths[final_update_indices] = candidate_depths[update_mask]
+                best_colors[final_update_indices] = update_colors
 
-                # 检查点是否在图像范围内
-                valid_mask = (points_uv[:, 0] >= 0) & (points_uv[:, 0] < w) & \
-                    (points_uv[:, 1] >= 0) & (points_uv[:, 1] < h)
-
-                # 获取原始点云中的索引
-                valid_indices = np.where(front_mask)[0][valid_mask]
-
-                # 为未赋值的有效点采样颜色
-                for idx, uv in zip(valid_indices, points_uv[valid_mask]):
-                    if not color_assigned[idx]:
-                        # 从图像中采样BGR颜色并转换为RGB
-                        color = img[uv[1], uv[0], ::-1] / 255.0
-                        colors[idx] = color
-                        color_assigned[idx] = True
-
-                if (args.rimg):
-                    # 创建rimg目录并保存点云投影图像
+                # 5. 生成rimg图像
+                if args.rimg:
                     rimg_dir = os.path.join(save_dir, "rimg", cam_id)
                     os.makedirs(rimg_dir, exist_ok=True)
-                    rimg_path = os.path.join(
-                        rimg_dir, f"{str(valid_frame_idx).zfill(6)}.png")
-
-                    # 创建rimg图像
                     rimg = img.copy()
-                    # 绘制投影点,使用基于深度的颜色
-                    for i, uv in enumerate(points_uv):
-                        if 0 <= uv[0] < w and 0 <= uv[1] < h:
-                            # 获取基于深度的RGB颜色
-                            color = get_rgb_by_distance(
-                                depths[i], min_val=0, max_val=100)
-                            # OpenCV使用BGR顺序,需要反转RGB
-                            color_bgr = (int(color[2]), int(
-                                color[1]), int(color[0]))
-                            cv2.circle(rimg, tuple(uv), 1, color_bgr, -1)
-                    cv2.imwrite(rimg_path, rimg)
+                    for i in range(len(u_valid[selected_idx])):
+                        u_pix, v_pix = u_valid[selected_idx][i], v_valid[selected_idx][i]
+                        d = d_valid[selected_idx][i]
+                        color = get_rgb_by_distance(d, min_val=0, max_val=100)
+                        rimg[v_pix, u_pix] = [color[2], color[1], color[0]]
+                    cv2.imwrite(os.path.join(rimg_dir, f"{str(valid_frame_idx).zfill(6)}.png"), rimg)
 
-                # 保存完整点云数据到lidar目录
-                pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
-                pcd.colors = o3d.utility.Vector3dVector(colors)
-                output_dir = os.path.join(save_dir, "lidar")
-                output_path = os.path.join(
-                    output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
-                o3d.io.write_point_cloud(output_path, pcd)
+        if args.lidar_depth:                
+                # # 保存相机坐标系下的完整点云数据到lidar目录            
+                # pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
+                # output_dir = os.path.join(save_dir, "lidar")
+                # output_path = os.path.join(
+                #     output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
+                # o3d.io.write_point_cloud(output_path, pcd)
 
-                # 只保存有颜色的点云数据到lidar_colored目录
-                valid_points = points_cam_front120[color_assigned]
-                valid_colors = colors[color_assigned]
+                # 保存所有相机投影后的着色点云
+                has_color = best_depths < np.inf
                 colored_pcd = o3d.geometry.PointCloud()
-                colored_pcd.points = o3d.utility.Vector3dVector(valid_points)
-                colored_pcd.colors = o3d.utility.Vector3dVector(valid_colors)
-                colored_output_dir = os.path.join(save_dir, "lidar_colored")
-                colored_output_path = os.path.join(
-                    colored_output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
-                o3d.io.write_point_cloud(colored_output_path, colored_pcd)
+                colored_pcd.points = o3d.utility.Vector3dVector(points_cam_front120[has_color])
+                colored_pcd.colors = o3d.utility.Vector3dVector(best_colors[has_color])
+                color_dir = os.path.join(save_dir, "lidar_colored")
+                os.makedirs(color_dir, exist_ok=True)
+                o3d.io.write_point_cloud(
+                    os.path.join(color_dir, f"{str(valid_frame_idx).zfill(6)}.ply"),
+                    colored_pcd
+                )
 
         # 处理3D边界框标注
         for obj in frame_data['annotations']:
