@@ -3,8 +3,8 @@
 export HUGSIM_WORKSPACE=/workspace
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# seq_name=scene-20250317_161633_1
-seq_name=scene-20250304_154844_2
+seq_name=scene-20250317_161633_1
+# seq_name=scene-20250304_154844_2
 dataset_name=zone
 
 input_path=${HUGSIM_WORKSPACE}/hugsim_data/${dataset_name}/${seq_name}

@@ -9,6 +9,20 @@ from tqdm import tqdm
 import argparse
 from sklearn import linear_model
 
+def get_Sphere_Norm(xyz):
+    # from lib.config import cfg
+    xyz_max = np.max(xyz, axis=0)
+    xyz_min = np.min(xyz, axis=0)
+    center = (xyz_max + xyz_min) / 2
+    radius = np.linalg.norm(xyz_max - xyz_min) / 2.
+    # scale = cfg.data.get('sphere_scale', 1.0)
+    scale = 1.0
+    radius *= scale
+    
+    return {
+        'radius': radius, 
+        'center': center,
+    }
 
 def get_opts():
     parser = argparse.ArgumentParser()
@@ -19,18 +33,22 @@ def get_opts():
 
 if __name__ == "__main__":
     args = get_opts()
+    dataset = args.out
+    meta_data_pth = os.path.join(dataset, 'meta_data.json')
+
+    with open(meta_data_pth, 'r') as f:
+        meta_data = json.load(f)
 
     ##########################################################################
     #                        merge lidar and colmap points                           #
     ##########################################################################
     # 构建对应的ply文件路径
-    colmap_ply_path = os.path.join(args.out, "sparse_ba_wo_ground.ply")
+    colmap_ply_path = os.path.join(args.out, "sparse_ba.ply")
     lidar_ply_path = os.path.join(args.out, "points3d_lidar_wo_ground.ply")
 
     # 初始化点云数据
     points = []
     colors = []
-    lidar_min_y = None  # 存储LiDAR点云的最高点（y最小值）
 
     # 检查并读取lidar点云
     if os.path.exists(lidar_ply_path):
@@ -38,13 +56,21 @@ if __name__ == "__main__":
         lidar_points = np.asarray(lidar_pcd.points)
         lidar_colors = np.asarray(lidar_pcd.colors)
         
-        # 计算LiDAR点云的最高点（y坐标最小值）
+        # Get sphere center and radius
+        lidar_sphere_normalization = get_Sphere_Norm(lidar_points)
+        sphere_center = lidar_sphere_normalization['center']
+        sphere_radius = lidar_sphere_normalization['radius']
+
         if len(lidar_points) > 0:
-            lidar_min_y = np.min(lidar_points[:, 1])
             points.extend(lidar_points)
             colors.extend(lidar_colors)
+        else:
+            print(f"Error: Lidar point cloud is empty: {lidar_ply_path}")
+            exit(1)
+
     else:
-        print(f"Warning: Lidar PLY file not found: {lidar_ply_path}")
+        print(f"Error: Lidar PLY file not found: {lidar_ply_path}")
+        exit(1)
 
     # 检查并读取colmap点云
     if os.path.exists(colmap_ply_path):
@@ -52,20 +78,28 @@ if __name__ == "__main__":
         colmap_points = np.asarray(colmap_pcd.points)
         colmap_colors = np.asarray(colmap_pcd.colors)
         
-        # 筛选colmap中高于LiDAR的点
-        if lidar_min_y is not None and len(colmap_points) > 0:
-            # 注意：坐标系y垂直向下，所以y值越小表示高度越高
-            above_mask = colmap_points[:, 1] < lidar_min_y
-            above_points = colmap_points[above_mask]
-            above_colors = colmap_colors[above_mask]
-            
-            points.extend(above_points)
-            colors.extend(above_colors)
-            print(f"Merged {len(above_points)} points above LiDAR height")
-        else:
-            # 如果没有LiDAR高度参考，合并全部colmap点云
-            points.extend(colmap_points)
-            colors.extend(colmap_colors)
+        # 排除相机附近和下方的点
+        points_colmap_mask = np.ones(colmap_points.shape[0], dtype=np.bool_)
+        extent=10
+        frames = meta_data['frames']
+        for frame in frames:
+            c2w = np.array(frame['camtoworld'])
+            camera_position =c2w[:3, 3]
+            radius = np.linalg.norm(colmap_points - camera_position, axis=-1)
+            mask = np.logical_or(radius < extent, colmap_points[:,1] > camera_position[1])
+            points_colmap_mask = np.logical_and(points_colmap_mask, ~mask)        
+        colmap_points = colmap_points[points_colmap_mask]
+        colmap_colors = colmap_colors[points_colmap_mask]
+
+        # 保留半径2倍于场景球体范围内的点
+        points_colmap_dist = np.linalg.norm(colmap_points - sphere_center, axis=-1)
+        mask = points_colmap_dist < 2 * sphere_radius
+        points_colmap_xyz = colmap_points[mask]
+        points_colmap_rgb = colmap_colors[mask]
+
+        points.extend(colmap_points)
+        colors.extend(colmap_colors)
+
     else:
         print(f"Warning: Colmap PLY file not found: {colmap_ply_path}")
 
@@ -76,5 +110,7 @@ if __name__ == "__main__":
         pcd.colors = o3d.utility.Vector3dVector(np.array(colors))
         o3d.io.write_point_cloud(os.path.join(
             args.out, "points3d_lidar_colmap_fusion.ply"), pcd)
+        o3d.io.write_point_cloud(os.path.join(
+            args.out, "points3d.ply"), pcd)        
     else:
         print("Error: No point cloud data available to merge")

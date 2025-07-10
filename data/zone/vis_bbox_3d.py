@@ -135,8 +135,8 @@ def filter_points_kdtree(points, vehicles, margin_factor=1.5):
 
 
 # 读取PCD文件
-pcd_path = "datasets/zone/3D_data_LSJWK4095NS119733/20250317_161633_1/Lidar/Pandar128_Compensate/n000002_2025-03-17-16-21-33-550040_Pandar128.pcd"  # 替换为你的PCD文件路径
-json_file = "datasets/zone/3D_data_LSJWK4095NS119733/20250317_161633_1/annotations/trackOD/20250317_161633_1_1/cache/autolabel_4dod/20250317_161633_1_1/offline_showformat/offline_showformat/n000002_2025-03-17-16-21-33-550040_Pandar128.pcd.json"
+pcd_path = "datasets/zone/3D_data_LSJWK4095NS119733/20250317_161633_1/Lidar/Pandar128_Compensate/n000002_2025-03-17-16-21-46-650108_Pandar128.pcd"  # 替换为你的PCD文件路径
+json_file = "datasets/zone/3D_data_LSJWK4095NS119733/20250317_161633_1/annotations/trackOD/20250317_161633_1_1/cache/autolabel_4dod/20250317_161633_1_1/offline_showformat/n000002_2025-03-17-16-21-46-650108_Pandar128.pcd.json"
 
 # ===================== 安全读取 =====================
 

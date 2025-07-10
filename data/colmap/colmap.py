@@ -88,6 +88,17 @@ class COLMAPAuto:
             '--image_path', self.path_images,
             '--input_path', self.path_ba,
             '--output_path', self.path_ba,
+            ' --Mapper.ba_refine_focal_length', '0', 
+            '--Mapper.ba_refine_principal_point', '0',
+            '--Mapper.max_extra_param', '0',
+            '--clear_points', ' 0',
+            '--Mapper.ba_global_max_num_iterations', '30',
+            '--Mapper.filter_max_reproj_error', '4',
+            '--Mapper.filter_min_tri_angle', '0.5',
+            '--Mapper.tri_min_angle', '0.5',
+            '--Mapper.tri_ignore_two_view_tracks', '1',
+            '--Mapper.tri_complete_max_reproj_error', '4',
+            '--Mapper.tri_continue_max_angle_error', '4'
         ])
 
     def id_mapping_in_database(self):
