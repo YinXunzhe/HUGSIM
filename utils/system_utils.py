@@ -24,5 +24,5 @@ def mkdir_p(folder_path):
             raise
 
 def searchForMaxIteration(folder):
-    saved_iters = [int(fname.split("_")[-1][6:-4]) for fname in os.listdir(folder) if not fname.startswith("ground")]
+    saved_iters = [int(fname.split("_")[-1][6:-4]) for fname in os.listdir(folder) if fname.startswith("chkpnt") ]
     return max(saved_iters)

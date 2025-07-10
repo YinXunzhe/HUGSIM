@@ -3,7 +3,9 @@ import torch
 from torch import optim
 from torch import nn
 from tqdm import tqdm
-from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('Agg')  # 禁用交互模式
+import matplotlib.pyplot as plt
 import torch.nn.functional as F
 from collections import defaultdict
 import os
