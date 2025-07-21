@@ -23,7 +23,7 @@ def to_video(observations, output_path):
         row2 = np.concatenate([obs['CAM_BACK_RIGHT'], obs['CAM_BACK'], obs['CAM_BACK_LEFT']], axis=1)
         frame = np.concatenate([row1, row2], axis=0)
         frames.append(frame)
-    clip = ImageSequenceClip(frames, fps=4)
+    clip = ImageSequenceClip(frames, fps=10)
     clip.write_videofile(output_path)
 
 
@@ -82,7 +82,7 @@ def create_gym_env(cfg, output):
             'obj_names': ['car' for _ in info['obj_boxes']],
             'planned_traj': {
                 'traj': global_traj,
-                'timestep': 0.25
+                'timestep': 0.1
             },
             'collision': info['collision'],
             'rc': info['rc']
