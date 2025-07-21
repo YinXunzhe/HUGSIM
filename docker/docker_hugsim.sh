@@ -22,7 +22,10 @@ function docker_id() {
         ID="$(
             docker run -d -i --privileged \
                 --gpus all \
-                --net host \
+                -e NVIDIA_DRIVER_CAPABILITIES=graphics,compute,utility \
+                -e __NV_PRIME_RENDER_OFFLOAD=1 \
+                -e __GLX_VENDOR_LIBRARY_NAME=nvidia \
+                -e DISPLAY="${DISPLAY}" \
                 --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
                 -v /home/robosense/hugsim_workspace:/workspace \
                 -v /mnt:/mnt \
@@ -31,13 +34,13 @@ function docker_id() {
                 -e HOME=${HOME} \
                 -e USER=${USER} \
                 -u $(id -u):$(id -g) \
-                -e DISPLAY="${DISPLAY}" \
                 -e QT_X11_NO_MITSHM=1 \
                 -e GDK_SCALE="${GDK_SCALE:-}" \
                 -e GDK_DPI_SCALE="${GDK_DPI_SCALE:-}" \
                 -w "/workspace" \
                 -h "hugsim-docker" \
-               --add-host hugsim-docker:127.0.0.1\
+                --net host \
+                --add-host hugsim-docker:127.0.0.1\
                 --ipc "host" \
                 --name "hugsim-docker" \
                hugsim_image:latest \
