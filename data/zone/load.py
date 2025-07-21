@@ -7,6 +7,7 @@ from tqdm import tqdm  # 进度条显示
 import os
 import argparse
 import open3d as o3d  # 用于3D点云处理
+import mediapy as media
 from utils import *
 
 def get_opts():
@@ -24,8 +25,9 @@ def get_opts():
                         help='图像下采样率，默认为2')
     parser.add_argument('--rimg', action="store_true", default=False,
                         help='是否生成rimg图像'),
-    parser.add_argument('--lidar_depth', action="store_true", default=True,
+    parser.add_argument('--lidar_depth', action="store_true", default=False,
                         help='是否根据点云生成深度图像')
+    parser.add_argument('--video', action="store_true", default=False)
 
     return parser.parse_args()
 
@@ -138,6 +140,7 @@ if __name__ == '__main__':
     valid_frame_idx = 0
 
     # 遍历所有JSON数据帧
+    video_images = []
     for frame_idx, frame_data in tqdm(enumerate(data_sequence)):
         # 计算相对时间戳（秒）
         timestamp_str = frame_data["meta"]["sensor"][0]["timestamp"]
@@ -229,7 +232,7 @@ if __name__ == '__main__':
             # 对称截去自车车体部分
             ego_body_pixels = 0
             if cam_id == 'CAM_FRONT_120':
-                ego_body_pixels = 512  # 前视Dedistort图引擎盖高度
+                ego_body_pixels = 532  # 前视Dedistort图引擎盖高度
                 # img = img[0:h, :]
                 img = img[ego_body_pixels:h-ego_body_pixels, :]
                 h = h-2*ego_body_pixels
@@ -374,25 +377,59 @@ if __name__ == '__main__':
                         rimg[v_pix, u_pix] = [color[2], color[1], color[0]]
                     cv2.imwrite(os.path.join(rimg_dir, f"{str(valid_frame_idx).zfill(6)}.png"), rimg)
 
-        if args.lidar_depth:                
-                # # 保存相机坐标系下的完整点云数据到lidar目录            
-                # pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
-                # output_dir = os.path.join(save_dir, "lidar")
-                # output_path = os.path.join(
-                #     output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
-                # o3d.io.write_point_cloud(output_path, pcd)
+                    if args.lidar_depth:                
+                        # # 保存相机坐标系下的完整点云数据到lidar目录            
+                        # pcd.points = o3d.utility.Vector3dVector(points_cam_front120)
+                        # output_dir = os.path.join(save_dir, "lidar")
+                        # output_path = os.path.join(
+                        #     output_dir, f"{str(valid_frame_idx).zfill(6)}.ply")
+                        # o3d.io.write_point_cloud(output_path, pcd)
 
-                # 保存所有相机投影后的着色点云
-                has_color = best_depths < np.inf
-                colored_pcd = o3d.geometry.PointCloud()
-                colored_pcd.points = o3d.utility.Vector3dVector(points_cam_front120[has_color])
-                colored_pcd.colors = o3d.utility.Vector3dVector(best_colors[has_color])
-                color_dir = os.path.join(save_dir, "lidar_colored")
-                os.makedirs(color_dir, exist_ok=True)
-                o3d.io.write_point_cloud(
-                    os.path.join(color_dir, f"{str(valid_frame_idx).zfill(6)}.ply"),
-                    colored_pcd
-                )
+                        # 保存所有相机投影后的着色点云
+                        has_color = best_depths < np.inf
+                        colored_pcd = o3d.geometry.PointCloud()
+                        colored_pcd.points = o3d.utility.Vector3dVector(points_cam_front120[has_color])
+                        colored_pcd.colors = o3d.utility.Vector3dVector(best_colors[has_color])
+                        color_dir = os.path.join(save_dir, "lidar_colored")
+                        os.makedirs(color_dir, exist_ok=True)
+                        o3d.io.write_point_cloud(
+                            os.path.join(color_dir, f"{str(valid_frame_idx).zfill(6)}.ply"),
+                            colored_pcd
+                        )
+
+        # 生成拼接视频
+        if args.video:
+            cat_images = []
+            for cam in cams:
+                img_path = os.path.join(save_dir, "images", cam, f"{str(valid_frame_idx).zfill(6)}.png")
+                img = cv2.imread(img_path)
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                # 计算保持比例的目标尺寸
+                h_orig, w_orig = img.shape[:2]
+                aspect = w_orig / h_orig
+                target_h = 640
+                target_w = int(target_h * aspect)
+                
+                # 保持比例resize
+                img = cv2.resize(img, (target_w, target_h), interpolation=cv2.INTER_AREA)
+                
+                # 中心裁剪到960x640
+                if target_w > 960:
+                    start_x = (target_w - 960) // 2
+                    img = img[:, start_x:start_x+960]
+                elif target_w < 960:
+                    # 如果宽度不足，填充黑色边框
+                    pad_left = (960 - target_w) // 2
+                    pad_right = 960 - target_w - pad_left
+                    img = cv2.copyMakeBorder(img, 0, 0, pad_left, pad_right, 
+                                           cv2.BORDER_CONSTANT, value=[0,0,0])
+                cat_images.append(img)
+    
+            cat_images = cv2.vconcat([
+                cv2.hconcat([cat_images[1], cat_images[0], cat_images[2]]),
+                cv2.hconcat([cat_images[5], cat_images[3], cat_images[4]]),
+            ])
+            video_images.append(cat_images)
 
         # 处理3D边界框标注
         for obj in frame_data['annotations']:
@@ -573,6 +610,10 @@ if __name__ == '__main__':
     # 保存元数据到JSON文件
     with open(os.path.join(save_dir, 'meta_data.json'), 'w') as wf:
         json.dump(meta_data, wf, indent=2)
+
+    # 生成视频文件
+    if args.video and video_images:
+        media.write_video(os.path.join(save_dir, 'view.mp4'), video_images, fps=10)
 
     ##########################################################################
     #                        读取第一帧信息                                    #

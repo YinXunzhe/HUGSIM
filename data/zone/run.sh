@@ -21,7 +21,7 @@ mkdir -p $out
 cd ${HUGSIM_WORKSPACE}/HUGSIM/data
 
 # load images, camera pose, etc
-python zone/load.py -b ${base_dir} --downsample 2 -o ${out} -s ${segment} --track_seq_id ${track_seq_id}
+python zone/load.py -b ${base_dir} --downsample 2 -o ${out} -s ${segment} --track_seq_id ${track_seq_id} --lidar_depth
 
 python utils/vis_bbox_2d.py --out ${out}
 
