@@ -196,6 +196,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--iteration", type=int, default=30000,
                         help="Iteration number of the model to load")
+    parser.add_argument("--model_folder", type=str, default="exported",
+                        help="Model  folder name (e.g. exported, exported_infer, exported_lidar)")
     args = parser.parse_args()
 
     scenario_config = OmegaConf.load(args.scenario_path)
@@ -208,15 +210,7 @@ if __name__ == "__main__":
         {"camera": camera_config}
     )
 
-    model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name, "exported_infer")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_lidar")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_colmap")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_lidar_colmap")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_lidar_colmap_voxel")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_dense_to_15000")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_lidar_voxel_40W")
-    # model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name,"exported_only_front_cams")     
+    model_path = os.path.join(cfg.base.model_base, cfg.scenario.scene_name, args.model_folder)
 
     model_config = OmegaConf.load(os.path.join(model_path, 'cfg.yaml'))
     cfg.update(model_config)
