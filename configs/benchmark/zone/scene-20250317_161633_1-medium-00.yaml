@@ -1,7 +1,7 @@
 mode: medium_00
 plan_list:
-- - 0 #x
-  - 30 #z
+- - 0.5 #x
+  - 15 #z
   - -0.30 #height
   - 0 # start aw is based on ego car's orientation. 0 means same direction as ego.  Right is positive and left is negative.
   - 2 #start velo
